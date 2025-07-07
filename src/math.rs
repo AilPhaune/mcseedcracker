@@ -1,3 +1,5 @@
+use crate::random::JavaRandom;
+
 pub struct Math;
 
 impl Math {
@@ -29,6 +31,47 @@ impl Math {
         x = x.wrapping_add(x.wrapping_sub(value.wrapping_mul(x).wrapping_mul(x)));
         x = x.wrapping_add(x.wrapping_sub(value.wrapping_mul(x).wrapping_mul(x)));
         Self::mask(x, n)
+    }
+
+    #[inline(always)]
+    pub const fn block_coords_to_chunk_coords(coords: (i32, i32)) -> (i32, i32) {
+        (coords.0 >> 4, coords.1 >> 4)
+    }
+
+    #[inline(always)]
+    pub const fn chunk_coords_to_region_coords(coords: (i32, i32)) -> (i32, i32) {
+        (coords.0 >> 5, coords.1 >> 5)
+    }
+
+    #[inline(always)]
+    pub const fn block_coords_to_region_coords(coords: (i32, i32)) -> (i32, i32) {
+        Self::chunk_coords_to_region_coords(Self::block_coords_to_chunk_coords(coords))
+    }
+
+    #[inline(always)]
+    pub const fn relative_chunk_coords(
+        chunk_coords: (i32, i32),
+        block_coords: (i32, i32),
+    ) -> (i32, i32) {
+        (
+            (chunk_coords.0 * 16) + block_coords.0,
+            (chunk_coords.1 * 16) + block_coords.1,
+        )
+    }
+
+    #[inline(always)]
+    pub const fn region_coords_to_lower_chunk_coords(coords: (i32, i32)) -> (i32, i32) {
+        (coords.0 << 5, coords.1 << 5)
+    }
+
+    #[inline(always)]
+    /// Returns a random number between min and max (inclusive)
+    pub const fn next_int(rng: &mut JavaRandom, min: i32, max: i32) -> i32 {
+        if min >= max {
+            min
+        } else {
+            rng.next_bounded_int(max - min + 1) + min
+        }
     }
 }
 

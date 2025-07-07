@@ -1,5 +1,6 @@
 use crate::{lcg::JAVA_RANDOM, math::Math};
 
+#[derive(Default, Debug, Clone, Copy)]
 pub struct JavaRandom {
     seed: i64,
 }
@@ -56,11 +57,16 @@ impl JavaRandom {
     pub const fn next_long(&mut self) -> i64 {
         let hi = self.next_int() as i64;
         let lo = self.next_int() as i64;
-        (hi << 32) + lo
+        (hi << 32).wrapping_add(lo)
     }
 
     pub const fn next_bool(&mut self) -> bool {
         self.next(1) != 0
+    }
+
+    pub const fn next_float(&mut self) -> f32 {
+        self.next(f32::MANTISSA_DIGITS as i64) as f32
+            / (Math::pow_2(f32::MANTISSA_DIGITS as i32) as f32)
     }
 }
 
@@ -71,4 +77,71 @@ pub const fn shuffle<T>(array: &mut [T], random: &mut JavaRandom) {
         array.swap(i - 1, swap_i as usize);
         i -= 1;
     }
+}
+
+pub const fn random_with_terrain_seed(chunk_x: i32, chunk_z: i32) -> (JavaRandom, i64) {
+    let seed = (chunk_x as i64)
+        .wrapping_mul(341873128712i64)
+        .wrapping_add((chunk_z as i64).wrapping_mul(132897987541i64));
+
+    (JavaRandom::new(seed), seed)
+}
+
+pub const fn random_with_population_seed(
+    world_seed: i64,
+    block_x: i32,
+    block_z: i32,
+) -> (JavaRandom, i64) {
+    let mut rng = JavaRandom::new(world_seed);
+    let xmul = rng.next_long() | 1;
+    let zmul = rng.next_long() | 1;
+    let seed = (block_x as i64)
+        .wrapping_mul(xmul)
+        .wrapping_add((block_z as i64).wrapping_mul(zmul))
+        ^ world_seed;
+
+    (JavaRandom::new(seed), seed)
+}
+
+pub const fn random_with_decorator_seed(
+    population_seed: i64,
+    index: i32,
+    step: i32,
+) -> (JavaRandom, i64) {
+    let seed = population_seed
+        .wrapping_add(index as i64)
+        .wrapping_add(1000i64.wrapping_mul(step as i64));
+
+    (JavaRandom::new(seed), seed)
+}
+
+pub const fn random_with_carver_seed(
+    world_seed: i64,
+    chunk_x: i32,
+    chunk_z: i32,
+) -> (JavaRandom, i64) {
+    let mut rng = JavaRandom::new(world_seed);
+    let xmul = rng.next_long();
+    let zmul = rng.next_long();
+    let seed = (chunk_x as i64)
+        .wrapping_mul(xmul)
+        .wrapping_add((chunk_z as i64).wrapping_mul(zmul))
+        ^ world_seed;
+
+    (JavaRandom::new(seed), seed)
+}
+
+pub const fn random_with_region_seed(
+    world_seed: i64,
+    reg_x: i32,
+    reg_z: i32,
+    salt: i32,
+) -> (JavaRandom, i64) {
+    let seed = (reg_x as i64)
+        .wrapping_mul(341873128712i64)
+        .wrapping_add((reg_z as i64).wrapping_mul(132897987541i64))
+        .wrapping_add(world_seed)
+        .wrapping_add(salt as i64);
+
+    (JavaRandom::new(seed), seed)
 }

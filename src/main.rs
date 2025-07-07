@@ -17,6 +17,7 @@ use crate::tui::{
 pub mod discrete_log;
 pub mod features;
 pub mod lcg;
+pub mod loot_table;
 pub mod math;
 pub mod random;
 pub mod tui;
