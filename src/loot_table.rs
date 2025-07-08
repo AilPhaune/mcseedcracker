@@ -66,6 +66,7 @@ pub trait Inventory: Debug {
     fn set_item(&mut self, slot: i32, item: Option<ItemStack>);
     fn get_item(&self, slot: i32) -> Option<&ItemStack>;
     fn remove_item(&mut self, slot: i32) -> Option<ItemStack>;
+    fn clear(&mut self);
 }
 
 impl SingleChest {
@@ -96,6 +97,13 @@ impl SingleChest {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FastInventoryCompareContext<T: Inventory + PartialEq, const N: usize> {
+    pub items_count: [i32; N],
+    pub total_items: i32,
+    pub inventory: T,
+}
+
 impl Default for SingleChest {
     fn default() -> Self {
         Self::new()
@@ -120,11 +128,89 @@ impl Inventory for SingleChest {
     fn remove_item(&mut self, slot: i32) -> Option<ItemStack> {
         self.get_slot_mut(slot)?.take()
     }
+
+    fn clear(&mut self) {
+        self.rows
+            .iter_mut()
+            .for_each(|r| r.items.iter_mut().for_each(|i| *i = None));
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct LootTable {
     pools: Vec<LootPool>,
+}
+
+macro_rules! compare_fast0 {
+    ($loot: ident, $compare: ident, $rng: ident, $luck: ident, $self: ident) => {{
+        let mut rem_count = $compare.items_count;
+        let mut rem_items = $compare.total_items;
+
+        if !$self.generate_raw_loot_callback(&mut $rng, $luck, |items, stop| {
+            rem_count[items.item] -= items.count;
+            if rem_count[items.item] < 0 {
+                *stop = true;
+                return;
+            }
+
+            rem_items -= items.count;
+            if rem_items < 0 {
+                *stop = true;
+                return;
+            }
+
+            if items.count < items.max_count {
+                $loot.push(items);
+            } else {
+                let stacks = items.count / items.max_count;
+                let remainder = items.count % items.max_count;
+                if remainder > 0 {
+                    for _ in 0..stacks {
+                        $loot.push(ItemStack {
+                            item: items.item,
+                            count: items.max_count,
+                            max_count: items.max_count,
+                        });
+                    }
+                    $loot.push(ItemStack {
+                        item: items.item,
+                        count: remainder,
+                        max_count: items.max_count,
+                    });
+                } else {
+                    $loot.push(ItemStack {
+                        item: items.item,
+                        count: items.max_count,
+                        max_count: items.max_count,
+                    });
+                }
+            }
+        }) {
+            return false;
+        }
+    }};
+}
+
+macro_rules! compare_fast1 {
+    ($temp_empty_inventory: ident, $compare: ident, $loot: ident, $rng: ident, $self_type: ident) => {{
+        let mut free_slots = $self_type::get_free_slots($temp_empty_inventory, &mut $rng);
+
+        $self_type::shuffle_loot(&mut $loot, free_slots.len() as i32, &mut $rng);
+
+        for stack in $loot {
+            let Some(slot) = free_slots.pop() else {
+                break;
+            };
+
+            if stack.count == 0 {
+                $temp_empty_inventory.set_item(slot, None);
+            } else {
+                $temp_empty_inventory.set_item(slot, Some(stack));
+            }
+        }
+
+        $temp_empty_inventory == &$compare.inventory
+    }};
 }
 
 impl LootTable {
@@ -156,6 +242,26 @@ impl LootTable {
         }
 
         res
+    }
+
+    /// Returns false if the generation process has been stopped, returns true if it was completed
+    pub fn generate_raw_loot_callback<F>(
+        &self,
+        rng: &mut JavaRandom,
+        luck: f32,
+        mut callback: F,
+    ) -> bool
+    where
+        F: FnMut(ItemStack, &mut bool),
+    {
+        let mut stop = false;
+        for pool in &self.pools {
+            if stop {
+                break;
+            }
+            pool.generate_raw_loot_callback(rng, luck, (&mut callback, &mut stop));
+        }
+        !stop
     }
 
     fn divide(loot: Vec<ItemStack>) -> Vec<ItemStack> {
@@ -191,32 +297,6 @@ impl LootTable {
                 }
             })
             .collect()
-    }
-
-    pub fn generate_stacked_loot(&self, rng: &mut JavaRandom, luck: f32) -> Vec<ItemStack> {
-        Self::divide(self.generate_unverified_stacked_loot(rng, luck))
-    }
-
-    pub fn generate_unverified_organised_loot(
-        &self,
-        rng: &mut JavaRandom,
-        luck: f32,
-    ) -> Vec<ItemStack> {
-        let mut res: Vec<ItemStack> = Vec::new();
-
-        for loot in self.generate_raw_loot(rng, luck) {
-            if let Some(item) = res.last_mut() {
-                if item.item == loot.item {
-                    item.count += loot.count;
-                } else {
-                    res.push(loot);
-                }
-            } else {
-                res.push(loot);
-            }
-        }
-
-        res
     }
 
     fn get_free_slots(inv: &dyn Inventory, rng: &mut JavaRandom) -> Vec<i32> {
@@ -286,6 +366,31 @@ impl LootTable {
             }
         }
     }
+
+    pub fn compare_fast<T: Inventory + PartialEq, const N: usize>(
+        &self,
+        mut rng: JavaRandom,
+        luck: f32,
+        compare: &FastInventoryCompareContext<T, N>,
+        temp_empty_inventory: &mut T,
+    ) -> bool {
+        let mut loot = Vec::new();
+        compare_fast0!(loot, compare, rng, luck, self);
+        temp_empty_inventory.clear();
+        compare_fast1!(temp_empty_inventory, compare, loot, rng, LootTable)
+    }
+
+    pub fn compare_fast_noinv<T: Inventory + PartialEq + Default, const N: usize>(
+        &self,
+        mut rng: JavaRandom,
+        luck: f32,
+        compare: &FastInventoryCompareContext<T, N>,
+    ) -> bool {
+        let mut loot = Vec::new();
+        compare_fast0!(loot, compare, rng, luck, self);
+        let temp_empty_inventory = &mut T::default();
+        compare_fast1!(temp_empty_inventory, compare, loot, rng, LootTable)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -354,6 +459,27 @@ impl LootPool {
         }
 
         vec
+    }
+
+    pub fn generate_raw_loot_callback<F>(
+        &self,
+        rng: &mut JavaRandom,
+        luck: f32,
+        mut callback: (F, &mut bool),
+    ) where
+        F: FnMut(ItemStack, &mut bool),
+    {
+        let rolls = self.rolls.apply(rng);
+        for _ in 0..rolls {
+            if *callback.1 {
+                break;
+            }
+            self.select_entry(rng, luck).generate_raw_loot_callback(
+                rng,
+                luck,
+                (&mut callback.0, callback.1),
+            );
+        }
     }
 
     fn select_entry(&self, rng: &mut JavaRandom, luck: f32) -> &LootPoolEntry {
@@ -449,6 +575,19 @@ impl LootPoolEntry {
     pub fn generate_raw_loot(&self, rng: &mut JavaRandom, luck: f32) -> Vec<ItemStack> {
         match self {
             LootPoolEntry::Item(item) => vec![item.generate_raw_loot(rng, luck)],
+        }
+    }
+
+    pub fn generate_raw_loot_callback<F>(
+        &self,
+        rng: &mut JavaRandom,
+        luck: f32,
+        mut callback: (F, &mut bool),
+    ) where
+        F: FnMut(ItemStack, &mut bool),
+    {
+        match self {
+            LootPoolEntry::Item(item) => callback.0(item.generate_raw_loot(rng, luck), callback.1),
         }
     }
 

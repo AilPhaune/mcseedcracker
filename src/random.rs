@@ -1,6 +1,6 @@
 use crate::{lcg::JAVA_RANDOM, math::Math};
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct JavaRandom {
     seed: i64,
 }

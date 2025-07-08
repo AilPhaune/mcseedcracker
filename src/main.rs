@@ -72,11 +72,12 @@ mod tests {
         enums::{BiomeID, Dimension, MCVersion, StructureType},
         generator::{BlockPosition, Generator, GeneratorFlags},
     };
+    use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
     use crate::{
         features::{
             buried_treasure,
-            end_pillars::{PartialEndPillars, PillarHeightHint},
+            end_pillars::{EndPillars, PartialEndPillars, PillarHeightHint},
         },
         lcg,
         loot_table::{ChestRow, ItemStack, SingleChest},
@@ -120,16 +121,28 @@ mod tests {
 
             pillars.0[8].height = PillarHeightHint::Exact(97);
 
-            let results = pillars
-                .seed_results()
-                .into_iter()
-                .filter(|(_, r)| !r.is_impossible_match())
-                .collect::<Vec<_>>();
+            let mut seed = None;
+            let mut rpillars = EndPillars::new();
+            for pseed in 0..65536 {
+                rpillars.from_seed(pseed);
+                if !pillars.matches(&rpillars).is_impossible_match() {
+                    if let Some(s) = seed {
+                        panic!("Found two pillar seeds: {} and {}", s, pseed);
+                    }
+                    seed = Some(pseed);
+                    break;
+                }
+            }
 
-            assert_eq!(results.len(), 1);
-
-            results[0].0
+            seed.expect("No pillar seed found")
         };
+
+        println!("Found pillar seed: {}", pillar_seed);
+        assert_eq!(
+            pillar_seed, 13847,
+            "Wrong pillar seed {}, expected {}",
+            pillar_seed, 13847
+        );
 
         let bt_chunk = Math::block_coords_to_chunk_coords((409, 809));
 
@@ -183,9 +196,13 @@ mod tests {
                 ],
             };
 
+            let bt_compare_context =
+                buried_treasure::build_fast_inventory_compare_context(bt_contents);
+
             let rev = lcg::JAVA_RANDOM.combine(-2);
 
-            let mut res_seed = None;
+            /*let mut res_seed = None;
+            let mut temp_inventory = SingleChest::new();
 
             for state_lo in 0i64..65536 {
                 for state_hi in 0i64..65536 {
@@ -197,7 +214,13 @@ mod tests {
                         continue;
                     }
 
-                    if buried_treasure::get_buried_treasure(seed, bt_chunk, 0.0) == bt_contents {
+                    if buried_treasure::compare_buried_treasure_fast(
+                        seed,
+                        bt_chunk,
+                        0.0,
+                        &bt_compare_context,
+                        &mut temp_inventory,
+                    ) {
                         if let Some(struct_seed) = res_seed {
                             panic!(
                                 "multiple structure seeds found: last={}, new={}",
@@ -209,10 +232,49 @@ mod tests {
                 }
             }
 
-            res_seed.expect("structure seed not found")
+            res_seed.expect("structure seed not found")*/
+
+            let values: Vec<i64> = (0u64..(1u64 << 32))
+                .into_par_iter()
+                .filter_map(|i| {
+                    let state_lo = i & 0xFFFF;
+                    let state_hi = i >> 16;
+                    let state = ((state_hi as i64) << 32)
+                        | ((pillar_seed as i64) << 16)
+                        | (state_lo as i64);
+                    let reversed_state = rev.next_seed(state);
+                    let seed = reversed_state ^ lcg::JAVA_RANDOM.get_multiplier();
+
+                    if !buried_treasure::generates_at(seed, bt_chunk) {
+                        return None;
+                    }
+
+                    if buried_treasure::compare_buried_treasure_fast_noinv(
+                        seed,
+                        bt_chunk,
+                        0.0,
+                        &bt_compare_context,
+                    ) {
+                        Some(seed)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            match &values[..] {
+                [] => panic!("structure seed not found"),
+                [single] => *single,
+                multiple => panic!("multiple structure seeds found: {:?}", multiple),
+            }
         };
 
-        println!("structure_seed: {}", structure_seed);
+        println!("Found structure seed: {}", structure_seed);
+        assert_eq!(
+            structure_seed, 180066252004364i64,
+            "wrong structure seed {}, expected {}",
+            structure_seed, 180066252004364i64
+        );
 
         let world_seed = {
             let (x, z) = Math::relative_chunk_coords(bt_chunk, (0, 0));
@@ -252,8 +314,11 @@ mod tests {
             wseed.expect("World seed not found")
         };
 
-        println!("Found seed {}", world_seed);
-
-        assert_eq!(world_seed, -7193194438565520372);
+        println!("Found world seed {}", world_seed);
+        assert_eq!(
+            world_seed, -7193194438565520372i64,
+            "Wrong world seed {}, expected {}",
+            world_seed, -7193194438565520372i64
+        );
     }
 }

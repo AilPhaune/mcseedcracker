@@ -1,7 +1,7 @@
 use crate::{
     loot_table::{
-        ItemLootPoolEntryBuilder, LootPoolBuilder, LootTable, LootTableBuilder, SetCountFunction,
-        SingleChest,
+        FastInventoryCompareContext, ItemLootPoolEntryBuilder, LootPoolBuilder, LootTable,
+        LootTableBuilder, SetCountFunction, SingleChest,
     },
     math::Math,
     random::{
@@ -56,6 +56,44 @@ pub fn get_buried_treasure(world_seed: i64, chunk_pos: (i32, i32), luck: f32) ->
     let mut chest = SingleChest::new();
     get_loot_table().generate_in_inventory(&mut chest, &mut JavaRandom::new(seed), luck);
     chest
+}
+
+pub fn build_fast_inventory_compare_context(
+    contents: SingleChest,
+) -> FastInventoryCompareContext<SingleChest, 12> {
+    let mut ctx = FastInventoryCompareContext {
+        inventory: contents,
+        items_count: [0; 12],
+        total_items: 0,
+    };
+    for row in ctx.inventory.rows.iter() {
+        for item in row.items.iter().flatten() {
+            ctx.items_count[item.item] += item.count;
+            ctx.total_items += item.count;
+        }
+    }
+    ctx
+}
+
+pub fn compare_buried_treasure_fast(
+    world_seed: i64,
+    chunk_pos: (i32, i32),
+    luck: f32,
+    compare: &FastInventoryCompareContext<SingleChest, 12>,
+    temp_inventory: &mut SingleChest,
+) -> bool {
+    let seed = get_buried_treasure_loot_table_seed(world_seed, chunk_pos);
+    get_loot_table().compare_fast(JavaRandom::new(seed), luck, compare, temp_inventory)
+}
+
+pub fn compare_buried_treasure_fast_noinv(
+    world_seed: i64,
+    chunk_pos: (i32, i32),
+    luck: f32,
+    compare: &FastInventoryCompareContext<SingleChest, 12>,
+) -> bool {
+    let seed = get_buried_treasure_loot_table_seed(world_seed, chunk_pos);
+    get_loot_table().compare_fast_noinv(JavaRandom::new(seed), luck, compare)
 }
 
 pub fn get_loot_table() -> LootTable {
@@ -149,6 +187,7 @@ pub fn get_loot_table() -> LootTable {
 mod tests {
     use crate::{
         features::buried_treasure::{
+            build_fast_inventory_compare_context, compare_buried_treasure_fast,
             get_buried_treasure, get_buried_treasure_loot_table_seed,
             items::{
                 COOKED_COD, COOKED_SALMON, EMERALD, GOLD_INGOT, HEART_OF_THE_SEA, IRON_INGOT,
@@ -299,5 +338,56 @@ mod tests {
         );
 
         assert_eq!(ingame, generated);
+    }
+
+    #[test]
+    fn test_buried_treasure_fast_compare() {
+        let mut chest = SingleChest::new();
+
+        for seed in 0..100 {
+            for chunk_x in 0..10 {
+                for chunk_z in 0..10 {
+                    let standard = get_buried_treasure(seed, (chunk_x, chunk_z), 0.0);
+                    let ctx = build_fast_inventory_compare_context(standard);
+
+                    assert!(
+                        compare_buried_treasure_fast(
+                            seed,
+                            (chunk_x, chunk_z),
+                            0.0,
+                            &ctx,
+                            &mut chest
+                        ),
+                        "failed fast compare for seed {} chunk_x {} chunk_z {}",
+                        seed,
+                        chunk_x,
+                        chunk_z
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_fast_compare_invariants() {
+        for i in 0..100 {
+            let seed: i64 = 0x123456789ABCDEF + i;
+            let mystery_chest = get_buried_treasure(seed, (12, 34), 0.0);
+
+            let mut chest = SingleChest::new();
+            let ctx = build_fast_inventory_compare_context(mystery_chest);
+
+            for cx in 0..50 {
+                for cz in 0..50 {
+                    assert_eq!(
+                        compare_buried_treasure_fast(seed, (cx, cz), 0.0, &ctx, &mut chest),
+                        (cx == 12) && (cz == 34),
+                        "Wrong fast compare result for cx {} cz {}",
+                        cx,
+                        cz
+                    );
+                }
+            }
+        }
     }
 }
