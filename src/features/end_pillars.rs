@@ -131,6 +131,18 @@ impl PillarMatchResult {
             }
         }
     }
+
+    pub fn is_exact_match(&self) -> bool {
+        matches!(self, PillarMatchResult::ExactMatch)
+    }
+
+    pub fn is_impossible_match(&self) -> bool {
+        matches!(self, PillarMatchResult::ImpossibleMatch)
+    }
+
+    pub fn is_possible_match(&self) -> bool {
+        matches!(self, PillarMatchResult::PossibleMatch(_))
+    }
 }
 
 impl PartialEndPillar {

@@ -150,7 +150,10 @@ mod tests {
     use crate::{
         features::buried_treasure::{
             get_buried_treasure, get_buried_treasure_loot_table_seed,
-            items::{COOKED_SALMON, EMERALD, HEART_OF_THE_SEA, IRON_INGOT, LEATHER_CHESTPLATE},
+            items::{
+                COOKED_COD, COOKED_SALMON, EMERALD, GOLD_INGOT, HEART_OF_THE_SEA, IRON_INGOT,
+                IRON_SWORD, LEATHER_CHESTPLATE, PRISMARINE_CRYSTALS,
+            },
         },
         loot_table::{ChestRow, ItemStack, SingleChest},
         math::Math,
@@ -237,6 +240,61 @@ mod tests {
         let generated = get_buried_treasure(
             1094031370582075292,
             Math::block_coords_to_chunk_coords((-55, 3241)),
+            0.0,
+        );
+
+        assert_eq!(ingame, generated);
+    }
+
+    #[test]
+    fn test_buried_treasure_chest2() {
+        let ingame = SingleChest {
+            rows: [
+                ChestRow {
+                    items: [
+                        Some(ItemStack::of(COOKED_COD, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::new(IRON_SWORD, 1, 1)),
+                        Some(ItemStack::of(COOKED_COD, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        None,
+                        None,
+                        None,
+                    ],
+                },
+                ChestRow {
+                    items: [
+                        Some(ItemStack::of(GOLD_INGOT, 2)),
+                        Some(ItemStack::of(COOKED_COD, 2)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(HEART_OF_THE_SEA, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(COOKED_COD, 2)),
+                        None,
+                        None,
+                    ],
+                },
+                ChestRow {
+                    items: [
+                        Some(ItemStack::of(GOLD_INGOT, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(COOKED_COD, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(COOKED_COD, 1)),
+                        Some(ItemStack::of(IRON_INGOT, 1)),
+                        Some(ItemStack::of(PRISMARINE_CRYSTALS, 3)),
+                        Some(ItemStack::of(PRISMARINE_CRYSTALS, 1)),
+                        None,
+                    ],
+                },
+            ],
+        };
+
+        let generated = get_buried_treasure(
+            -7193194438565520372,
+            Math::block_coords_to_chunk_coords((409, 809)),
             0.0,
         );
 
