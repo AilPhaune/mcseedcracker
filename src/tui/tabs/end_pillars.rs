@@ -1,8 +1,11 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
-use crate::{
+use mcseedcracker::{
     CHARACTER_ASPECT_RATIO,
     features::end_pillars::{PartialEndPillars, PillarHeightHint, PillarMatchResult},
+};
+
+use crate::{
     make_full_component,
     tui::{Component, EventContext, EventResult, application::ApplicationTab},
 };

@@ -7,12 +7,12 @@ pub struct EndPillars(pub [EndPillar; 10]);
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
 pub struct EndPillar {
-    index: i32,
-    height: i32,
-    x: i32,
-    z: i32,
-    radius: i32,
-    caged: bool,
+    pub index: i32,
+    pub height: i32,
+    pub x: i32,
+    pub z: i32,
+    pub radius: i32,
+    pub caged: bool,
 }
 
 impl EndPillars {
