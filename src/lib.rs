@@ -4,6 +4,7 @@ pub mod lcg;
 pub mod loot_table;
 pub mod math;
 pub mod random;
+pub mod utils;
 
 pub const CHARACTER_ASPECT_RATIO: f64 = 0.5; // width/height
 

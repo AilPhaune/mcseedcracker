@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_buried_treasure_chest() {
+    pub fn test_buried_treasure_chest1() {
         let ingame = SingleChest {
             rows: [
                 ChestRow {

@@ -6,10 +6,43 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq, Eq)]
+pub enum ItemProperty {
+    Damage { max_durability: i32, damage: i32 },
+    Enchantment { enchantment: i32, level: i32 },
+}
+
+impl Debug for ItemProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Damage {
+                max_durability,
+                damage,
+            } => {
+                write!(
+                    f,
+                    "Damage(damage={},durability={}/{})",
+                    damage,
+                    max_durability - damage,
+                    max_durability
+                )
+            }
+            Self::Enchantment { enchantment, level } => {
+                write!(
+                    f,
+                    "Enchantment(enchantment={},level={})",
+                    enchantment, level
+                )
+            }
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub struct ItemStack {
     pub item: usize,
     pub count: i32,
     pub max_count: i32,
+    pub properties: Vec<ItemProperty>,
 }
 
 impl ItemStack {
@@ -18,6 +51,7 @@ impl ItemStack {
             item,
             count,
             max_count: 64,
+            properties: Vec::new(),
         }
     }
 
@@ -26,6 +60,21 @@ impl ItemStack {
             item,
             count,
             max_count,
+            properties: Vec::new(),
+        }
+    }
+
+    pub fn with_properties(
+        item: usize,
+        count: i32,
+        max_count: i32,
+        properties: &[ItemProperty],
+    ) -> Self {
+        Self {
+            item,
+            count,
+            max_count,
+            properties: properties.to_vec(),
         }
     }
 
@@ -35,11 +84,13 @@ impl ItemStack {
             item: self.item,
             count,
             max_count: self.max_count,
+            properties: self.properties.clone(),
         };
         let b = ItemStack {
             item: self.item,
             count: self.count - count,
             max_count: self.max_count,
+            properties: self.properties.clone(),
         };
         (a, b)
     }
@@ -47,7 +98,11 @@ impl ItemStack {
 
 impl Debug for ItemStack {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {}/{})", self.item, self.count, self.max_count)
+        write!(
+            f,
+            "({}, {}/{}) {:?}",
+            self.item, self.count, self.max_count, self.properties
+        )
     }
 }
 
@@ -170,18 +225,21 @@ macro_rules! compare_fast0 {
                             item: items.item,
                             count: items.max_count,
                             max_count: items.max_count,
+                            properties: items.properties.clone(),
                         });
                     }
                     $loot.push(ItemStack {
                         item: items.item,
                         count: remainder,
                         max_count: items.max_count,
+                        properties: items.properties.clone(),
                     });
                 } else {
                     $loot.push(ItemStack {
                         item: items.item,
                         count: items.max_count,
                         max_count: items.max_count,
+                        properties: items.properties.clone(),
                     });
                 }
             }
@@ -279,12 +337,14 @@ impl LootTable {
                                 item: items.item,
                                 count: items.max_count,
                                 max_count: items.max_count,
+                                properties: items.properties.clone(),
                             });
                         }
                         result.push(ItemStack {
                             item: items.item,
                             count: remainder,
                             max_count: items.max_count,
+                            properties: items.properties.clone(),
                         });
                         result
                     } else {
@@ -292,6 +352,7 @@ impl LootTable {
                             item: items.item,
                             count: items.max_count,
                             max_count: items.max_count,
+                            properties: items.properties.clone(),
                         }]
                     }
                 }
@@ -437,6 +498,15 @@ impl LootTableRange<i32> {
                     rng.next_bounded_int(*max - *min + 1) + *min
                 }
             }
+            LootTableRange::Constant { value } => *value,
+        }
+    }
+}
+
+impl LootTableRange<f32> {
+    pub fn apply(&self, rng: &mut JavaRandom) -> f32 {
+        match self {
+            LootTableRange::Uniform { min, max } => rng.next_float() * (*max - *min) + *min,
             LootTableRange::Constant { value } => *value,
         }
     }
@@ -617,6 +687,7 @@ impl ItemLootPoolEntry {
             item: self.item,
             count: 1,
             max_count: self.stack_size,
+            properties: Vec::new(),
         };
 
         for f in &self.functions {
@@ -708,7 +779,122 @@ impl LootFunction for SetCountFunction {
             item: item.item,
             count: self.range.apply(rng),
             max_count: item.max_count,
+            properties: item.properties,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetDamageFunction {
+    range: LootTableRange<f32>,
+    item_durability: i32,
+}
+
+impl SetDamageFunction {
+    pub const fn new(item_durability: i32, range: LootTableRange<f32>) -> Self {
+        Self {
+            item_durability,
+            range,
+        }
+    }
+
+    pub const fn constant(item_durability: i32, value: f32) -> Self {
+        Self::new(item_durability, LootTableRange::Constant { value })
+    }
+
+    pub const fn uniform(item_durability: i32, min: f32, max: f32) -> Self {
+        Self::new(item_durability, LootTableRange::Uniform { min, max })
+    }
+
+    pub fn as_function(self) -> Arc<dyn LootFunction> {
+        Arc::new(self)
+    }
+}
+
+impl LootFunction for SetDamageFunction {
+    fn apply(&self, mut item: ItemStack, rng: &mut JavaRandom, _luck: f32) -> ItemStack {
+        let damage = 1.0f32 - self.range.apply(rng);
+
+        item.properties.push(ItemProperty::Damage {
+            max_durability: self.item_durability,
+            damage: (damage * self.item_durability as f32).floor() as i32,
+        });
+
+        item
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetEnchantsRandomlyFunction {
+    // List of pairs (enchant_id, min_level, max_level)
+    pub enchantments: Vec<(i32, i32, i32)>,
+}
+
+impl SetEnchantsRandomlyFunction {
+    pub fn builder() -> SetEnchantsRandomlyFunctionBuilder {
+        SetEnchantsRandomlyFunctionBuilder {
+            func: SetEnchantsRandomlyFunction {
+                enchantments: vec![],
+            },
+        }
+    }
+
+    pub fn as_function(self) -> Arc<dyn LootFunction> {
+        Arc::new(self)
+    }
+}
+
+impl LootFunction for SetEnchantsRandomlyFunction {
+    fn apply(&self, mut item: ItemStack, rng: &mut JavaRandom, _luck: f32) -> ItemStack {
+        let (enchant, min_level, max_level) = match self.enchantments.len() {
+            0 => return item,
+            l => {
+                let i = rng.next_bounded_int(l as i32);
+                self.enchantments[i as usize]
+            }
+        };
+
+        let level = Math::next_int(rng, min_level, max_level);
+
+        item.properties.push(ItemProperty::Enchantment {
+            enchantment: enchant,
+            level,
+        });
+
+        item
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetEnchantsRandomlyFunctionBuilder {
+    func: SetEnchantsRandomlyFunction,
+}
+
+impl SetEnchantsRandomlyFunctionBuilder {
+    pub fn build(self) -> SetEnchantsRandomlyFunction {
+        self.func
+    }
+
+    pub fn enchantment(mut self, enchantment: i32, min_level: i32, max_level: i32) -> Self {
+        self.func
+            .enchantments
+            .push((enchantment, min_level, max_level));
+        self
+    }
+
+    pub fn enchant(mut self, enchantment: (i32, i32, i32)) -> Self {
+        self.func.enchantments.push(enchantment);
+        self
+    }
+
+    pub fn all_of(mut self, enchantments: &[(i32, i32, i32)]) -> Self {
+        for e in enchantments {
+            if self.func.enchantments.iter().any(|x| x.0 == e.0) {
+                continue;
+            }
+            self.func.enchantments.push(*e);
+        }
+        self
     }
 }
 
@@ -716,7 +902,13 @@ impl LootFunction for SetCountFunction {
 pub mod tests {
     use std::collections::HashMap;
 
-    use crate::features::buried_treasure::{self, get_loot_table};
+    use crate::features::{
+        bastion::{
+            self, bastion_bridges_chest_loot_table, bastion_hoglin_stables_chest_loot_table,
+            bastion_other_chest_loot_table, bastion_treasure_room_chest_loot_table,
+        },
+        buried_treasure::{self, get_loot_table},
+    };
 
     use super::*;
 
@@ -793,6 +985,234 @@ pub mod tests {
                     ItemStack::of(buried_treasure::items::DIAMOND, 3),
                     ItemStack::of(buried_treasure::items::TNT, 1),
                     ItemStack::of(buried_treasure::items::HEART_OF_THE_SEA, 1),
+                ],
+            );
+        }
+    }
+
+    #[test]
+    pub fn test_bastion_hoglin_stables_loot_table() {
+        let lt = bastion_hoglin_stables_chest_loot_table();
+
+        {
+            // World seed: 734679766044180411, coords: 97 45 166
+            let loot_seed = 2799166732823584713;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::hoglin_stables::CRIMSON_FUNGUS, 3),
+                    ItemStack::of(bastion::items::hoglin_stables::CRIMSON_ROOTS, 3),
+                    ItemStack::of(bastion::items::hoglin_stables::CRIMSON_NYLIUM, 4),
+                    ItemStack::of(bastion::items::hoglin_stables::SADDLE, 1),
+                    ItemStack::of(bastion::items::hoglin_stables::GOLDEN_AXE, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -198 33 116
+            let loot_seed = -6910931640652618249;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::hoglin_stables::ARROW, 6),
+                    ItemStack::of(bastion::items::hoglin_stables::GILDED_BLACKSTONE, 5),
+                    ItemStack::of(bastion::items::hoglin_stables::CRIMSON_NYLIUM, 6),
+                    ItemStack::of(bastion::items::hoglin_stables::DIAMOND_SHOVEL, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -199 39 118
+            let loot_seed = -7642394814910834770;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::hoglin_stables::GLOWSTONE, 5),
+                    ItemStack::of(bastion::items::hoglin_stables::CRYING_OBSIDIAN, 5),
+                    ItemStack::of(bastion::items::hoglin_stables::CRIMSON_NYLIUM, 3),
+                    ItemStack::of(bastion::items::hoglin_stables::PORKCHOP, 2),
+                    ItemStack::of(bastion::items::hoglin_stables::DIAMOND_PICKAXE, 1),
+                ],
+            );
+        }
+    }
+
+    #[test]
+    fn test_bastion_other_loot_table() {
+        let lt = bastion_other_chest_loot_table();
+
+        {
+            // World seed: 734679766044180411, coords: -179 58 148
+            let loot_seed = 7527759590123788878;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::other::CHAIN, 2),
+                    ItemStack::of(bastion::items::other::GILDED_BLACKSTONE, 4),
+                    ItemStack::of(bastion::items::other::ANCIENT_DEBRIS, 1),
+                    ItemStack::of(bastion::items::other::IRON_INGOT, 6),
+                    ItemStack::of(bastion::items::other::STRING, 6),
+                    ItemStack::of(bastion::items::other::CROSSBOW, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -183 68 157
+            let loot_seed = 6412612709946978967;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::other::MAGMA_CREAM, 4),
+                    ItemStack::of(bastion::items::other::GOLDEN_SWORD, 1),
+                    ItemStack::of(bastion::items::other::IRON_INGOT, 2),
+                    ItemStack::of(bastion::items::other::CHAIN, 10),
+                    ItemStack::of(bastion::items::other::GILDED_BLACKSTONE, 5),
+                    ItemStack::of(bastion::items::other::GOLDEN_APPLE, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -195 58 150
+            let loot_seed = -2252231701536112854;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::other::STRING, 5),
+                    ItemStack::of(bastion::items::other::ANCIENT_DEBRIS, 1),
+                    ItemStack::of(bastion::items::other::IRON_INGOT, 7),
+                    ItemStack::of(bastion::items::other::COOKED_PORKCHOP, 1),
+                    ItemStack::of(bastion::items::other::CHAIN, 9),
+                    ItemStack::of(bastion::items::other::GILDED_BLACKSTONE, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -163 58 150
+            let loot_seed = -3993577815288360752;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::other::ARROW, 6),
+                    ItemStack::of(bastion::items::other::GOLD_NUGGET, 4),
+                    ItemStack::of(bastion::items::other::IRON_SWORD, 1),
+                    ItemStack::of(bastion::items::other::GOLDEN_BOOTS, 1),
+                    ItemStack::of(bastion::items::other::STRING, 5),
+                    ItemStack::of(bastion::items::other::PIGLIN_BANNER_PATTERN, 1),
+                ],
+            );
+        }
+    }
+
+    #[test]
+    fn test_bastion_treasure_room_loot_table() {
+        let lt = bastion_treasure_room_chest_loot_table();
+
+        {
+            // World seed: 734679766044180411, coords: -724 36 -94
+            let loot_seed = 6602806808929530262;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::treasure_room::GILDED_BLACKSTONE, 7),
+                    ItemStack::of(bastion::items::treasure_room::IRON_BLOCK, 4),
+                    ItemStack::of(bastion::items::treasure_room::SPECTRAL_ARROW, 22),
+                    ItemStack::of(bastion::items::treasure_room::DIAMOND_CHESTPLATE, 1),
+                    ItemStack::of(bastion::items::treasure_room::ANCIENT_DEBRIS, 1),
+                    ItemStack::of(bastion::items::treasure_room::DIAMOND_LEGGINGS, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -674 36 -820
+            let loot_seed = 4548431199292841666;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::treasure_room::QUARTZ, 12),
+                    ItemStack::of(bastion::items::treasure_room::IRON_BLOCK, 3),
+                    ItemStack::of(bastion::items::treasure_room::CRYING_OBSIDIAN, 5),
+                    ItemStack::of(bastion::items::treasure_room::DIAMOND_BOOTS, 1),
+                    ItemStack::of(bastion::items::treasure_room::DIAMOND_LEGGINGS, 2),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: -2564 36 -1022
+            let loot_seed = -5772293875455727490;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::treasure_room::DIAMOND_CHESTPLATE, 1),
+                    ItemStack::of(bastion::items::treasure_room::QUARTZ, 38),
+                    ItemStack::of(bastion::items::treasure_room::CRYING_OBSIDIAN, 5),
+                    ItemStack::of(bastion::items::treasure_room::GOLD_BLOCK, 5),
+                    ItemStack::of(bastion::items::treasure_room::NETHERITE_SCRAP, 1),
+                    ItemStack::of(bastion::items::treasure_room::ANCIENT_DEBRIS, 1),
+                ],
+            );
+        }
+
+        {
+            // World seed: 734679766044180411, coords: 2229 36 -1107
+            let loot_seed = -2953714471323038189;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::treasure_room::GOLD_BLOCK, 4),
+                    ItemStack::of(bastion::items::treasure_room::CRYING_OBSIDIAN, 5),
+                    ItemStack::of(bastion::items::treasure_room::IRON_BLOCK, 3),
+                    ItemStack::of(bastion::items::treasure_room::NETHERITE_INGOT, 1),
+                    ItemStack::of(bastion::items::treasure_room::DIAMOND_SWORD, 2),
+                ],
+            );
+        }
+    }
+
+    #[test]
+    fn test_bastion_bridges_loot_table() {
+        let lt = bastion_bridges_chest_loot_table();
+
+        {
+            // World seed: 734679766044180411, coords: 583 80 956
+            let loot_seed = -1212149287281495045;
+            let loot = lt.generate_unverified_stacked_loot(&mut JavaRandom::new(loot_seed), 0.0);
+            check_loot(
+                loot_seed,
+                loot,
+                vec![
+                    ItemStack::of(bastion::items::bridges::ARROW, 26),
+                    ItemStack::of(bastion::items::bridges::LEATHER, 2),
+                    ItemStack::of(bastion::items::bridges::SPECTRAL_ARROW, 14),
+                    ItemStack::of(bastion::items::bridges::LODESTONE, 1),
                 ],
             );
         }
