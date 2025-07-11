@@ -7,13 +7,16 @@ use mcseedcracker::{
 
 use crate::{
     make_full_component,
-    tui::{Component, EventContext, EventResult, application::ApplicationTab, limit_area_height},
+    tui::{
+        Component, EventContext, EventResult, application::ApplicationTab, limit_area_height,
+        limit_area_width,
+    },
 };
 
 use ratatui::{
     buffer::Buffer,
     crossterm::event::{Event, KeyCode, KeyEventKind},
-    layout::{Alignment, Margin, Rect},
+    layout::{Alignment, Margin, Offset, Rect},
     style::{Color, Style, Stylize},
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
@@ -142,45 +145,46 @@ impl StatefulWidget for EndPillarsTabComponent {
             let l14_2 = Paragraph::new(" 1st key press = range min\n 2nd key press = range max")
                 .style(Style::default().fg(Color::Green).not_bold());
 
-            let mut larea = limit_area_height(area, 1);
+            let mut larea = limit_area_height(limit_area_width(area, 40), 1);
             larea.y += 2;
             l1.render(larea, buf);
             larea.y += 1;
             l2_1.render(larea, buf);
-            l2_2.render(larea.inner(Margin::new(14, 0)), buf);
+            l2_2.render(larea.offset(Offset { x: 14, y: 0 }), buf);
             larea.y += 1;
             l3_1.render(larea, buf);
-            l3_2.render(larea.inner(Margin::new(11, 0)), buf);
+            l3_2.render(larea.offset(Offset { x: 11, y: 0 }), buf);
             larea.y += 2;
             l4.render(larea, buf);
             larea.y += 1;
             l5_1.render(larea, buf);
-            l5_2.render(larea.inner(Margin::new(5, 0)), buf);
+            l5_2.render(larea.offset(Offset { x: 5, y: 0 }), buf);
             larea.y += 1;
             l6_1.render(larea, buf);
-            l6_2.render(larea.inner(Margin::new(39, 0)), buf);
+            l6_2.render(larea.offset(Offset { x: 39, y: 0 }), buf);
             larea.y += 2;
             l7.render(larea, buf);
             larea.y += 1;
             l8_1.render(larea, buf);
-            l8_2.render(larea.inner(Margin::new(25, 0)), buf);
+            l8_2.render(larea.offset(Offset { x: 25, y: 0 }), buf);
             larea.y += 1;
             l9_1.render(larea, buf);
-            l9_2.render(larea.inner(Margin::new(3, 0)), buf);
+            l9_2.render(larea.offset(Offset { x: 3, y: 0 }), buf);
             larea.y += 1;
             l10_1.render(larea, buf);
-            l10_2.render(larea.inner(Margin::new(7, 0)), buf);
+            l10_2.render(larea.offset(Offset { x: 7, y: 0 }), buf);
             larea.y += 1;
             l11_1.render(larea, buf);
-            l11_2.render(larea.inner(Margin::new(3, 0)), buf);
+            l11_2.render(larea.offset(Offset { x: 3, y: 0 }), buf);
             larea.y += 2;
             l12.render(larea, buf);
             larea.y += 1;
             l13_1.render(larea, buf);
-            l13_2.render(larea.inner(Margin::new(23, 0)), buf);
+            l13_2.render(larea.offset(Offset { x: 23, y: 0 }), buf);
             larea.y += 1;
             l14_1.render(larea, buf);
-            l14_2.render(larea.inner(Margin::new(25, 0)), buf);
+            larea.height = 2;
+            l14_2.render(larea.offset(Offset { x: 25, y: 0 }), buf);
         }
 
         let center_x = area.x + area.width / 2;
