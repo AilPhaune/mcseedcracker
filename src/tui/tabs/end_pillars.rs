@@ -7,7 +7,7 @@ use mcseedcracker::{
 
 use crate::{
     make_full_component,
-    tui::{Component, EventContext, EventResult, application::ApplicationTab},
+    tui::{Component, EventContext, EventResult, application::ApplicationTab, limit_area_height},
 };
 
 use ratatui::{
@@ -96,45 +96,53 @@ impl StatefulWidget for EndPillarsTabComponent {
             // controls
 
             let l1 = Paragraph::new("Arrow keys").style(Style::default().fg(Color::Yellow).bold());
-            let l2_1 = Paragraph::new("[LEFT] [RIGHT]").style(Style::default().fg(Color::Magenta));
-            let l2_2 = Paragraph::new(" Rotate").style(Style::default().fg(Color::Green));
-            let l3_1 = Paragraph::new("[UP] [DOWN]").style(Style::default().fg(Color::Magenta));
+            let l2_1 = Paragraph::new("[LEFT] [RIGHT]")
+                .style(Style::default().fg(Color::Magenta).not_bold());
+            let l2_2 =
+                Paragraph::new(" Rotate").style(Style::default().fg(Color::Green).not_bold());
+            let l3_1 =
+                Paragraph::new("[UP] [DOWN]").style(Style::default().fg(Color::Magenta).not_bold());
             let l3_2 = Paragraph::new(" Change pillar height hint")
-                .style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(Color::Green).not_bold());
 
             let l4 = Paragraph::new("Selection").style(Style::default().fg(Color::Yellow).bold());
-            let l5_1 = Paragraph::new("[TAB]").style(Style::default().fg(Color::Magenta));
-            let l5_2 = Paragraph::new(" Next pillar").style(Style::default().fg(Color::Green));
+            let l5_1 =
+                Paragraph::new("[TAB]").style(Style::default().fg(Color::Magenta).not_bold());
+            let l5_2 = Paragraph::new(" Next pillar")
+                .style(Style::default().fg(Color::Green))
+                .not_bold();
             let l6_1 = Paragraph::new("[0] [1] [2] [3] [4] [5] [6] [7] [8] [9]")
-                .style(Style::default().fg(Color::Magenta));
-            let l6_2 = Paragraph::new(" Select pillar").style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(Color::Magenta).not_bold());
+            let l6_2 = Paragraph::new(" Select pillar")
+                .style(Style::default().fg(Color::Green).not_bold());
 
             let l7 = Paragraph::new("Pillars").style(Style::default().fg(Color::Yellow).bold());
             let l8_1 = Paragraph::new("[DEL] [BACKSPACE] [SPACE]")
-                .style(Style::default().fg(Color::Magenta));
-            let l8_2 =
-                Paragraph::new(" Reset pillar data").style(Style::default().fg(Color::Green));
-            let l9_1 = Paragraph::new("[C]").style(Style::default().fg(Color::Magenta));
+                .style(Style::default().fg(Color::Magenta).not_bold());
+            let l8_2 = Paragraph::new(" Reset pillar data")
+                .style(Style::default().fg(Color::Green).not_bold());
+            let l9_1 = Paragraph::new("[C]").style(Style::default().fg(Color::Magenta).not_bold());
             let l9_2 = Paragraph::new(" Cycle pillar `caged` status")
-                .style(Style::default().fg(Color::Green));
-            let l10_1 = Paragraph::new("[ENTER]").style(Style::default().fg(Color::Magenta));
-            let l10_2 =
-                Paragraph::new(" Wait for exact size").style(Style::default().fg(Color::Green));
-            let l11_1 = Paragraph::new("[R]").style(Style::default().fg(Color::Magenta));
-            let l11_2 =
-                Paragraph::new(" Wait for height range").style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(Color::Green).not_bold());
+            let l10_1 =
+                Paragraph::new("[ENTER]").style(Style::default().fg(Color::Magenta).not_bold());
+            let l10_2 = Paragraph::new(" Wait for exact size")
+                .style(Style::default().fg(Color::Green).not_bold());
+            let l11_1 = Paragraph::new("[R]").style(Style::default().fg(Color::Magenta).not_bold());
+            let l11_2 = Paragraph::new(" Wait for height range")
+                .style(Style::default().fg(Color::Green).not_bold());
 
             let l12 = Paragraph::new("[0] [1] [2] [3] [4] [5] [6] [7] [8] [9]")
                 .style(Style::default().fg(Color::Yellow).bold());
             let l13_1 = Paragraph::new("Waiting for exact size:")
-                .style(Style::default().fg(Color::Magenta));
+                .style(Style::default().fg(Color::Magenta).not_bold());
             let l13_2 = Paragraph::new(" 76 + 3*n").style(Style::default().fg(Color::Green));
             let l14_1 = Paragraph::new("Waiting for height range:")
-                .style(Style::default().fg(Color::Magenta));
+                .style(Style::default().fg(Color::Magenta).not_bold());
             let l14_2 = Paragraph::new(" 1st key press = range min\n 2nd key press = range max")
-                .style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(Color::Green).not_bold());
 
-            let mut larea = area;
+            let mut larea = limit_area_height(area, 1);
             larea.y += 2;
             l1.render(larea, buf);
             larea.y += 1;

@@ -41,7 +41,6 @@ fn reverse_seed_from_pillars_and_buried_treasure(input: &Input) -> i64 {
                     panic!("Found two pillar seeds: {} and {}", s, pseed);
                 }
                 seed = Some(pseed);
-                break;
             }
         }
 
@@ -143,7 +142,6 @@ fn reverse_seed_from_pillars_and_buried_treasure_threaded_rayon(input: &Input) -
                     panic!("Found two pillar seeds: {} and {}", s, pseed);
                 }
                 seed = Some(pseed);
-                break;
             }
         }
 

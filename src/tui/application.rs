@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::tui::{
     Component, EventContext, EventResult, FullComponent,
-    tabs::{end_pillars::EndPillarsTab, output::OutputTab},
+    tabs::{buried_treasure::BuriedTreasureTab, end_pillars::EndPillarsTab, output::OutputTab},
 };
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
@@ -32,7 +32,11 @@ impl ApplicationComponentState {
         Self {
             selected_tab: 0,
             focused_on_tab: true,
-            tabs: vec![EndPillarsTab::apptab(), OutputTab::apptab()],
+            tabs: vec![
+                EndPillarsTab::apptab(),
+                BuriedTreasureTab::apptab(),
+                OutputTab::apptab(),
+            ],
         }
     }
 }

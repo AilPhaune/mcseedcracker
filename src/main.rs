@@ -7,6 +7,7 @@ use ratatui::{
         event::{Event, KeyCode, KeyModifiers},
     },
     prelude::CrosstermBackend,
+    widgets::Paragraph,
 };
 
 use crate::tui::{
@@ -31,6 +32,10 @@ fn main() -> Result<(), io::Error> {
 
     loop {
         terminal.draw(|f| {
+            if f.area().width < 80 || f.area().height < 30 {
+                f.render_widget(Paragraph::new("Terminal window too small"), f.area());
+                return;
+            }
             f.render_stateful_widget(ApplicationComponent, f.area(), &mut app_state);
         })?;
 
