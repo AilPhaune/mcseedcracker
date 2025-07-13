@@ -1,15 +1,26 @@
-use std::any::Any;
+use ratatui::{buffer::Buffer, crossterm::event::Event, layout::Rect};
 
-use ratatui::{buffer::Buffer, crossterm::event::Event, layout::Rect, widgets::StatefulWidget};
+use crate::tui::application::SharedApplicationState;
 
 pub mod application;
 pub mod components;
 pub mod tabs;
 
-pub trait Component: StatefulWidget {
+pub trait Component {
+    type State;
+
+    fn render(
+        self,
+        area: Rect,
+        buf: &mut Buffer,
+        state: &mut Self::State,
+        shared: &mut SharedApplicationState,
+    );
+
     fn handle_event(
         self,
         state: &mut Self::State,
+        shared: &mut SharedApplicationState,
         event: Event,
         context: EventContext,
     ) -> EventResult;
@@ -21,17 +32,21 @@ pub enum EventResult {
     BubbleUp(Event),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventContext {
     BubblingDown,
     BubblingUp,
 }
 
 pub trait FullComponent {
-    fn get_state(&self) -> &dyn Any;
-    fn get_state_mut(&mut self) -> &mut dyn Any;
-    fn render(&mut self, area: Rect, buf: &mut Buffer);
-    fn handle_event(&mut self, event: Event, context: EventContext) -> EventResult;
+    fn render(&mut self, area: Rect, buf: &mut Buffer, shared: &mut SharedApplicationState);
+
+    fn handle_event(
+        &mut self,
+        event: Event,
+        context: EventContext,
+        shared: &mut SharedApplicationState,
+    ) -> EventResult;
 }
 
 #[macro_export]
@@ -42,28 +57,31 @@ macro_rules! make_full_component {
         }
 
         impl $name {
-            pub fn boxed() -> Box<dyn $crate::tui::FullComponent> {
-                Box::new($name {
+            pub fn create() -> $name {
+                $name {
                     state: $state::default(),
-                })
+                }
             }
         }
 
+        use $crate::tui::application::SharedApplicationState;
         impl $crate::tui::FullComponent for $name {
-            fn get_state(&self) -> &dyn std::any::Any {
-                &self.state
+            fn render(
+                &mut self,
+                area: Rect,
+                buf: &mut Buffer,
+                shared: &mut SharedApplicationState,
+            ) {
+                $component::default().render(area, buf, &mut self.state, shared);
             }
 
-            fn get_state_mut(&mut self) -> &mut dyn std::any::Any {
-                &mut self.state
-            }
-
-            fn render(&mut self, area: Rect, buf: &mut Buffer) {
-                $component::default().render(area, buf, &mut self.state);
-            }
-
-            fn handle_event(&mut self, event: Event, context: EventContext) -> EventResult {
-                $component::default().handle_event(&mut self.state, event, context)
+            fn handle_event(
+                &mut self,
+                event: Event,
+                context: EventContext,
+                shared: &mut SharedApplicationState,
+            ) -> EventResult {
+                $component::default().handle_event(&mut self.state, shared, event, context)
             }
         }
     };

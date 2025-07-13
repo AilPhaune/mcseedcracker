@@ -46,7 +46,8 @@ pub struct ItemStack {
 }
 
 impl ItemStack {
-    pub fn of(item: usize, count: i32) -> Self {
+    #[inline]
+    pub const fn of(item: usize, count: i32) -> Self {
         Self {
             item,
             count,
@@ -55,7 +56,8 @@ impl ItemStack {
         }
     }
 
-    pub fn new(item: usize, count: i32, max_count: i32) -> Self {
+    #[inline]
+    pub const fn new(item: usize, count: i32, max_count: i32) -> Self {
         Self {
             item,
             count,
@@ -64,6 +66,7 @@ impl ItemStack {
         }
     }
 
+    #[inline]
     pub fn with_properties(
         item: usize,
         count: i32,
@@ -78,6 +81,7 @@ impl ItemStack {
         }
     }
 
+    #[inline]
     pub fn split(&self, count: i32) -> (ItemStack, ItemStack) {
         let count = count.min(self.count);
         let a = ItemStack {
@@ -125,6 +129,7 @@ pub trait Inventory: Debug {
 }
 
 impl SingleChest {
+    #[inline]
     pub const fn new() -> Self {
         Self {
             rows: [const {
@@ -135,6 +140,7 @@ impl SingleChest {
         }
     }
 
+    #[inline]
     pub const fn get_slot(&self, slot: i32) -> Option<Option<&ItemStack>> {
         if slot < 0 || slot >= 27 {
             None
@@ -143,6 +149,7 @@ impl SingleChest {
         }
     }
 
+    #[inline]
     pub const fn get_slot_mut(&mut self, slot: i32) -> Option<&mut Option<ItemStack>> {
         if slot < 0 || slot >= 27 {
             None
@@ -160,30 +167,36 @@ pub struct FastInventoryCompareContext<T: Inventory + PartialEq, const N: usize>
 }
 
 impl Default for SingleChest {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl Inventory for SingleChest {
+    #[inline]
     fn slot_count(&self) -> i32 {
         27
     }
 
+    #[inline]
     fn set_item(&mut self, slot: i32, item: Option<ItemStack>) {
         if let Some(slot) = self.get_slot_mut(slot) {
             *slot = item;
         }
     }
 
+    #[inline]
     fn get_item(&self, slot: i32) -> Option<&ItemStack> {
         self.get_slot(slot)?
     }
 
+    #[inline]
     fn remove_item(&mut self, slot: i32) -> Option<ItemStack> {
         self.get_slot_mut(slot)?.take()
     }
 
+    #[inline]
     fn clear(&mut self) {
         self.rows
             .iter_mut()
@@ -272,10 +285,12 @@ macro_rules! compare_fast1 {
 }
 
 impl LootTable {
+    #[inline(always)]
     pub const fn new(pools: Vec<LootPool>) -> Self {
         Self { pools }
     }
 
+    #[inline]
     pub fn generate_raw_loot(&self, rng: &mut JavaRandom, luck: f32) -> Vec<ItemStack> {
         let mut res = Vec::new();
         for pool in &self.pools {
@@ -284,6 +299,7 @@ impl LootTable {
         res
     }
 
+    #[inline]
     pub fn generate_unverified_stacked_loot(
         &self,
         rng: &mut JavaRandom,
@@ -303,6 +319,7 @@ impl LootTable {
     }
 
     /// Returns false if the generation process has been stopped, returns true if it was completed
+    #[inline]
     pub fn generate_raw_loot_callback<F>(
         &self,
         rng: &mut JavaRandom,
@@ -322,6 +339,7 @@ impl LootTable {
         !stop
     }
 
+    #[inline]
     fn divide(loot: Vec<ItemStack>) -> Vec<ItemStack> {
         loot.into_iter()
             .flat_map(|items| {
@@ -360,6 +378,7 @@ impl LootTable {
             .collect()
     }
 
+    #[inline]
     fn get_free_slots(inv: &dyn Inventory, rng: &mut JavaRandom) -> Vec<i32> {
         let mut slots = (0..inv.slot_count())
             .filter(|&slot| match inv.get_item(slot) {
@@ -372,6 +391,7 @@ impl LootTable {
         slots
     }
 
+    #[inline]
     fn shuffle_loot(loot: &mut Vec<ItemStack>, free_slots: i32, rng: &mut JavaRandom) {
         let mut moved = Vec::new();
 
@@ -409,6 +429,7 @@ impl LootTable {
         shuffle(loot, rng);
     }
 
+    #[inline]
     pub fn generate_in_inventory(&self, inv: &mut dyn Inventory, rng: &mut JavaRandom, luck: f32) {
         let mut loot = Self::divide(self.generate_raw_loot(rng, luck));
         let mut free_slots = Self::get_free_slots(inv, rng);
@@ -428,6 +449,7 @@ impl LootTable {
         }
     }
 
+    #[inline]
     pub fn compare_fast<T: Inventory + PartialEq, const N: usize>(
         &self,
         mut rng: JavaRandom,
@@ -441,6 +463,7 @@ impl LootTable {
         compare_fast1!(temp_empty_inventory, compare, loot, rng, LootTable)
     }
 
+    #[inline]
     pub fn compare_fast_noinv<T: Inventory + PartialEq + Default, const N: usize>(
         &self,
         mut rng: JavaRandom,
@@ -466,16 +489,19 @@ impl Default for LootTableBuilder {
 }
 
 impl LootTableBuilder {
+    #[inline]
     pub fn build(self) -> LootTable {
         self.table
     }
 
+    #[inline]
     pub fn new() -> Self {
         Self {
             table: LootTable { pools: vec![] },
         }
     }
 
+    #[inline]
     pub fn pool(mut self, pool: LootPool) -> Self {
         self.table.pools.push(pool);
         self
@@ -489,6 +515,7 @@ pub enum LootTableRange<T> {
 }
 
 impl LootTableRange<i32> {
+    #[inline]
     pub fn apply(&self, rng: &mut JavaRandom) -> i32 {
         match self {
             LootTableRange::Uniform { min, max } => {
@@ -504,6 +531,7 @@ impl LootTableRange<i32> {
 }
 
 impl LootTableRange<f32> {
+    #[inline]
     pub fn apply(&self, rng: &mut JavaRandom) -> f32 {
         match self {
             LootTableRange::Uniform { min, max } => rng.next_float() * (*max - *min) + *min,
@@ -520,6 +548,7 @@ pub struct LootPool {
 }
 
 impl LootPool {
+    #[inline]
     pub fn generate_raw_loot(&self, rng: &mut JavaRandom, luck: f32) -> Vec<ItemStack> {
         let rolls = self.rolls.apply(rng);
 
@@ -531,6 +560,7 @@ impl LootPool {
         vec
     }
 
+    #[inline]
     pub fn generate_raw_loot_callback<F>(
         &self,
         rng: &mut JavaRandom,
@@ -552,6 +582,7 @@ impl LootPool {
         }
     }
 
+    #[inline]
     fn select_entry(&self, rng: &mut JavaRandom, luck: f32) -> &LootPoolEntry {
         if self.entries.len() == 1 {
             return &self.entries[0];
@@ -591,12 +622,14 @@ pub struct LootPoolBuilder {
 }
 
 impl Default for LootPoolBuilder {
+    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl LootPoolBuilder {
+    #[inline(always)]
     pub fn new() -> Self {
         Self {
             pool: LootPool {
@@ -606,30 +639,36 @@ impl LootPoolBuilder {
         }
     }
 
+    #[inline(always)]
     pub fn build(self) -> LootPool {
         self.pool
     }
 
+    #[inline(always)]
     pub fn rolls(mut self, rolls: LootTableRange<i32>) -> Self {
         self.pool.rolls = rolls;
         self
     }
 
+    #[inline(always)]
     pub fn rolls_const(mut self, value: i32) -> Self {
         self.pool.rolls = LootTableRange::Constant { value };
         self
     }
 
+    #[inline(always)]
     pub fn rolls_uniform(mut self, min: i32, max: i32) -> Self {
         self.pool.rolls = LootTableRange::Uniform { min, max };
         self
     }
 
+    #[inline]
     pub fn entry(mut self, entry: LootPoolEntry) -> Self {
         self.pool.entries.push(entry);
         self
     }
 
+    #[inline]
     pub fn entry_item(mut self, item: ItemLootPoolEntry) -> Self {
         self.pool.entries.push(LootPoolEntry::Item(item));
         self
@@ -642,12 +681,14 @@ pub enum LootPoolEntry {
 }
 
 impl LootPoolEntry {
+    #[inline]
     pub fn generate_raw_loot(&self, rng: &mut JavaRandom, luck: f32) -> Vec<ItemStack> {
         match self {
             LootPoolEntry::Item(item) => vec![item.generate_raw_loot(rng, luck)],
         }
     }
 
+    #[inline]
     pub fn generate_raw_loot_callback<F>(
         &self,
         rng: &mut JavaRandom,
@@ -661,6 +702,7 @@ impl LootPoolEntry {
         }
     }
 
+    #[inline]
     pub fn get_weight(&self, luck: f32) -> i32 {
         match self {
             LootPoolEntry::Item(item) => item.get_weight(luck),
@@ -682,6 +724,7 @@ pub struct ItemLootPoolEntry {
 }
 
 impl ItemLootPoolEntry {
+    #[inline]
     pub fn generate_raw_loot(&self, rng: &mut JavaRandom, luck: f32) -> ItemStack {
         let mut item_stack = ItemStack {
             item: self.item,
@@ -697,6 +740,7 @@ impl ItemLootPoolEntry {
         item_stack
     }
 
+    #[inline]
     pub fn get_weight(&self, luck: f32) -> i32 {
         (self.weight + (self.quality as f32 * luck).floor() as i32).max(0)
     }
@@ -708,6 +752,7 @@ pub struct ItemLootPoolEntryBuilder {
 }
 
 impl ItemLootPoolEntryBuilder {
+    #[inline(always)]
     pub fn new(item: usize) -> Self {
         Self {
             entry: ItemLootPoolEntry {
@@ -720,30 +765,36 @@ impl ItemLootPoolEntryBuilder {
         }
     }
 
+    #[inline(always)]
     pub fn build(self) -> ItemLootPoolEntry {
         self.entry
     }
 
+    #[inline(always)]
     pub fn weight(mut self, weight: i32) -> Self {
         self.entry.weight = weight;
         self
     }
 
+    #[inline(always)]
     pub fn quality(mut self, quality: i32) -> Self {
         self.entry.quality = quality;
         self
     }
 
+    #[inline(always)]
     pub fn item_stack_size(mut self, stack_size: i32) -> Self {
         self.entry.stack_size = stack_size;
         self
     }
 
+    #[inline(always)]
     pub fn item(mut self, item: usize) -> Self {
         self.entry.item = item;
         self
     }
 
+    #[inline(always)]
     pub fn function(mut self, function: Arc<dyn LootFunction>) -> Self {
         self.entry.functions.push(function);
         self
@@ -756,24 +807,29 @@ pub struct SetCountFunction {
 }
 
 impl SetCountFunction {
+    #[inline(always)]
     pub const fn new(range: LootTableRange<i32>) -> Self {
         Self { range }
     }
 
+    #[inline(always)]
     pub const fn constant(value: i32) -> Self {
         Self::new(LootTableRange::Constant { value })
     }
 
+    #[inline(always)]
     pub const fn uniform(min: i32, max: i32) -> Self {
         Self::new(LootTableRange::Uniform { min, max })
     }
 
+    #[inline(always)]
     pub fn as_function(self) -> Arc<dyn LootFunction> {
         Arc::new(self)
     }
 }
 
 impl LootFunction for SetCountFunction {
+    #[inline]
     fn apply(&self, item: ItemStack, rng: &mut JavaRandom, _luck: f32) -> ItemStack {
         ItemStack {
             item: item.item,
@@ -791,6 +847,7 @@ pub struct SetDamageFunction {
 }
 
 impl SetDamageFunction {
+    #[inline(always)]
     pub const fn new(item_durability: i32, range: LootTableRange<f32>) -> Self {
         Self {
             item_durability,
@@ -798,20 +855,24 @@ impl SetDamageFunction {
         }
     }
 
+    #[inline(always)]
     pub const fn constant(item_durability: i32, value: f32) -> Self {
         Self::new(item_durability, LootTableRange::Constant { value })
     }
 
+    #[inline(always)]
     pub const fn uniform(item_durability: i32, min: f32, max: f32) -> Self {
         Self::new(item_durability, LootTableRange::Uniform { min, max })
     }
 
+    #[inline(always)]
     pub fn as_function(self) -> Arc<dyn LootFunction> {
         Arc::new(self)
     }
 }
 
 impl LootFunction for SetDamageFunction {
+    #[inline]
     fn apply(&self, mut item: ItemStack, rng: &mut JavaRandom, _luck: f32) -> ItemStack {
         let damage = 1.0f32 - self.range.apply(rng);
 
@@ -831,6 +892,7 @@ pub struct SetEnchantsRandomlyFunction {
 }
 
 impl SetEnchantsRandomlyFunction {
+    #[inline(always)]
     pub fn builder() -> SetEnchantsRandomlyFunctionBuilder {
         SetEnchantsRandomlyFunctionBuilder {
             func: SetEnchantsRandomlyFunction {
@@ -839,12 +901,14 @@ impl SetEnchantsRandomlyFunction {
         }
     }
 
+    #[inline(always)]
     pub fn as_function(self) -> Arc<dyn LootFunction> {
         Arc::new(self)
     }
 }
 
 impl LootFunction for SetEnchantsRandomlyFunction {
+    #[inline]
     fn apply(&self, mut item: ItemStack, rng: &mut JavaRandom, _luck: f32) -> ItemStack {
         let (enchant, min_level, max_level) = match self.enchantments.len() {
             0 => return item,
@@ -871,10 +935,12 @@ pub struct SetEnchantsRandomlyFunctionBuilder {
 }
 
 impl SetEnchantsRandomlyFunctionBuilder {
+    #[inline(always)]
     pub fn build(self) -> SetEnchantsRandomlyFunction {
         self.func
     }
 
+    #[inline]
     pub fn enchantment(mut self, enchantment: i32, min_level: i32, max_level: i32) -> Self {
         self.func
             .enchantments
@@ -882,11 +948,13 @@ impl SetEnchantsRandomlyFunctionBuilder {
         self
     }
 
+    #[inline]
     pub fn enchant(mut self, enchantment: (i32, i32, i32)) -> Self {
         self.func.enchantments.push(enchantment);
         self
     }
 
+    #[inline]
     pub fn all_of(mut self, enchantments: &[(i32, i32, i32)]) -> Self {
         for e in enchantments {
             if self.func.enchantments.iter().any(|x| x.0 == e.0) {
@@ -912,6 +980,7 @@ pub mod tests {
 
     use super::*;
 
+    #[inline]
     fn check_loot(seed: i64, loot: Vec<ItemStack>, expected: Vec<ItemStack>) {
         let mut map = HashMap::new();
         for loot in &loot {

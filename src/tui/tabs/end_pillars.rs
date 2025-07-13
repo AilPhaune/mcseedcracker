@@ -2,7 +2,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 use mcseedcracker::{
     CHARACTER_ASPECT_RATIO,
-    features::end_pillars::{PartialEndPillars, PillarHeightHint, PillarMatchResult},
+    features::end_pillars::{PillarHeightHint, PillarMatchResult},
 };
 
 use crate::{
@@ -16,9 +16,9 @@ use crate::{
 use ratatui::{
     buffer::Buffer,
     crossterm::event::{Event, KeyCode, KeyEventKind},
-    layout::{Alignment, Margin, Offset, Rect},
+    layout::{Alignment, Offset, Rect},
     style::{Color, Style, Stylize},
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 
 #[derive(Default)]
@@ -33,7 +33,6 @@ pub enum WaitingOf {
 #[derive(Default)]
 pub struct EndPillarsTabState {
     pub focused_on_pillar: Option<usize>,
-    pub pillars: PartialEndPillars,
     pub rot: usize, // from 0 to 10, clockwise
     pub waiting: WaitingOf,
 }
@@ -44,10 +43,10 @@ pub struct EndPillarsTabComponent;
 make_full_component!(EndPillarsTab, state: EndPillarsTabState, component: EndPillarsTabComponent);
 
 impl EndPillarsTab {
-    pub fn apptab() -> ApplicationTab {
+    pub fn apptab() -> ApplicationTab<Self> {
         ApplicationTab {
             title: "End Pillars".to_string(),
-            component: EndPillarsTab::boxed(),
+            component: EndPillarsTab::create(),
         }
     }
 }
@@ -62,20 +61,36 @@ macro_rules! selected {
     };
 }
 
-impl StatefulWidget for EndPillarsTabComponent {
+impl Component for EndPillarsTabComponent {
     type State = EndPillarsTabState;
 
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let seed_results = state
-            .pillars
-            .seed_results()
-            .into_iter()
-            .filter(|(_, result)| match result {
-                PillarMatchResult::ImpossibleMatch => false,
-                PillarMatchResult::PossibleMatch(v) => *v != 0.0,
-                _ => true,
-            })
-            .collect::<Vec<_>>();
+    fn render(
+        self,
+        area: Rect,
+        buf: &mut Buffer,
+        state: &mut Self::State,
+        shared: &mut SharedApplicationState,
+    ) {
+        let seed_results = if matches!(shared.last_pillar_sim.as_ref(), Some((p, _)) if p == &shared.pillar_data)
+        {
+            shared.last_structure_seed_sim.outdated_data = true;
+            &shared.last_pillar_sim.as_ref().unwrap().1
+        } else {
+            shared.last_pillar_sim = Some((
+                shared.pillar_data,
+                shared
+                    .pillar_data
+                    .seed_results()
+                    .into_iter()
+                    .filter(|(_, result)| match result {
+                        PillarMatchResult::ImpossibleMatch => false,
+                        PillarMatchResult::PossibleMatch(v) => *v != 0.0,
+                        _ => true,
+                    })
+                    .collect::<Vec<_>>(),
+            ));
+            &shared.last_pillar_sim.as_ref().unwrap().1
+        };
 
         let title = Paragraph::new(format!("Valid pillar seeds count: {}", seed_results.len()))
             .style(Style::default().fg(Color::Yellow))
@@ -235,7 +250,7 @@ impl StatefulWidget for EndPillarsTabComponent {
         );
 
         // Render end pillars
-        for (i, pillar_data) in state.pillars.iter_mut().enumerate() {
+        for (i, pillar_data) in shared.pillar_data.iter_mut().enumerate() {
             let pillar_box_height: u16 = 5;
             let pillar_box_width = ((pillar_box_height as f64 / CHARACTER_ASPECT_RATIO).floor()
                 as u16)
@@ -329,12 +344,11 @@ impl StatefulWidget for EndPillarsTabComponent {
             height_text.render(inner_area, buf);
         }
     }
-}
 
-impl Component for EndPillarsTabComponent {
     fn handle_event(
         self,
         state: &mut Self::State,
+        shared: &mut SharedApplicationState,
         event: Event,
         context: EventContext,
     ) -> EventResult {
@@ -368,7 +382,7 @@ impl Component for EndPillarsTabComponent {
                 }
                 Event::Key(key) if key.code == KeyCode::Char('c') => {
                     if let Some(i) = state.focused_on_pillar {
-                        let pillar = &mut state.pillars.0[i];
+                        let pillar = &mut shared.pillar_data.0[i];
                         pillar.caged = match pillar.caged {
                             None => Some(true),
                             Some(true) => Some(false),
@@ -380,7 +394,7 @@ impl Component for EndPillarsTabComponent {
                 }
                 Event::Key(key) if key.code == KeyCode::Up => {
                     if let Some(i) = state.focused_on_pillar {
-                        let pillar = &mut state.pillars.0[i];
+                        let pillar = &mut shared.pillar_data.0[i];
                         pillar.height = match pillar.height {
                             PillarHeightHint::Unknown => PillarHeightHint::Small,
                             PillarHeightHint::Small => PillarHeightHint::MediumSmall,
@@ -395,7 +409,7 @@ impl Component for EndPillarsTabComponent {
                 }
                 Event::Key(key) if key.code == KeyCode::Down => {
                     if let Some(i) = state.focused_on_pillar {
-                        let pillar = &mut state.pillars.0[i];
+                        let pillar = &mut shared.pillar_data.0[i];
                         pillar.height = match pillar.height {
                             PillarHeightHint::Unknown => PillarHeightHint::Big,
                             PillarHeightHint::Big => PillarHeightHint::MediumBig,
@@ -414,7 +428,7 @@ impl Component for EndPillarsTabComponent {
                         || key.code == KeyCode::Char(' ') =>
                 {
                     if let Some(i) = state.focused_on_pillar {
-                        let pillar = &mut state.pillars.0[i];
+                        let pillar = &mut shared.pillar_data.0[i];
                         pillar.height = PillarHeightHint::Unknown;
                     }
                     state.waiting = WaitingOf::Nothing;
@@ -438,7 +452,7 @@ impl Component for EndPillarsTabComponent {
                             }
                             WaitingOf::PillarRangeMin => {
                                 if let Some(i) = state.focused_on_pillar {
-                                    let pillar = &mut state.pillars.0[i];
+                                    let pillar = &mut shared.pillar_data.0[i];
                                     let max = match pillar.height {
                                         PillarHeightHint::Exact(h)
                                         | PillarHeightHint::Range(_, h) => h,
@@ -455,7 +469,7 @@ impl Component for EndPillarsTabComponent {
                             }
                             WaitingOf::PillarRangeMax => {
                                 if let Some(i) = state.focused_on_pillar {
-                                    let pillar = &mut state.pillars.0[i];
+                                    let pillar = &mut shared.pillar_data.0[i];
                                     let min = match pillar.height {
                                         PillarHeightHint::Exact(h)
                                         | PillarHeightHint::Range(h, _) => h,
@@ -472,7 +486,7 @@ impl Component for EndPillarsTabComponent {
                             }
                             WaitingOf::PillarExact => {
                                 if let Some(i) = state.focused_on_pillar {
-                                    let pillar = &mut state.pillars.0[i];
+                                    let pillar = &mut shared.pillar_data.0[i];
                                     pillar.height = PillarHeightHint::Exact(76 + 3 * n as i32);
                                 }
                                 state.waiting = WaitingOf::Nothing;

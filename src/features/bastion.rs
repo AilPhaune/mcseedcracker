@@ -125,6 +125,7 @@ pub mod book_enchants {
     }
 }
 
+#[inline]
 pub fn bastion_other_chest_loot_table() -> LootTable {
     use crate::features::bastion::book_enchants::other::SOUL_SPEED;
     use crate::features::bastion::items::other::*;
@@ -408,6 +409,7 @@ pub fn bastion_other_chest_loot_table() -> LootTable {
         .build()
 }
 
+#[inline]
 pub fn bastion_hoglin_stables_chest_loot_table() -> LootTable {
     use crate::features::bastion::items::hoglin_stables::*;
 
@@ -585,6 +587,7 @@ pub fn bastion_hoglin_stables_chest_loot_table() -> LootTable {
         .build()
 }
 
+#[inline]
 pub fn bastion_treasure_room_chest_loot_table() -> LootTable {
     use crate::features::bastion::items::treasure_room::*;
 
@@ -808,6 +811,7 @@ pub fn bastion_treasure_room_chest_loot_table() -> LootTable {
         .build()
 }
 
+#[inline]
 pub fn bastion_bridges_chest_loot_table() -> LootTable {
     use items::bridges::*;
 
@@ -982,6 +986,7 @@ pub enum BastionChestType {
     Other,
 }
 
+#[inline(always)]
 pub const fn get_bastion_chest_random(world_seed: i64, chunk_pos: (i32, i32)) -> (JavaRandom, i64) {
     let block_pos = Math::relative_chunk_coords(chunk_pos, (0, 0));
 
@@ -990,6 +995,7 @@ pub const fn get_bastion_chest_random(world_seed: i64, chunk_pos: (i32, i32)) ->
     random_with_decorator_seed(population_seed, 12, 40)
 }
 
+#[inline(always)]
 pub const fn get_bastion_chest_loot_table_seed(
     world_seed: i64,
     chunk_pos: (i32, i32),
@@ -1007,6 +1013,7 @@ pub const fn get_bastion_chest_loot_table_seed(
     ((next1 & 0xFFFF_FFFF_0000) << 16).wrapping_add(((next2 >> 16) as i32) as i64)
 }
 
+#[inline]
 pub fn get_bastion_chest(
     world_seed: i64,
     chunk_pos: (i32, i32),

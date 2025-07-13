@@ -15,6 +15,7 @@ pub struct ChestState {
     pub contents: Vec<Vec<(String, i32, Style)>>,
     pub selected: (usize, usize),
     pub borders_style: Style,
+    pub show_selected: bool,
     pub title_style: Style,
     pub title: String,
 }
@@ -26,6 +27,7 @@ impl Default for ChestState {
             height: 3,
             contents: vec![vec![("".to_string(), 0, Style::default()); 9]; 3],
             selected: (0, 0),
+            show_selected: true,
             borders_style: Style::default().fg(Color::White),
             title_style: Style::default().fg(Color::White),
             title: "Chest".to_string(),
@@ -37,23 +39,17 @@ pub struct ChestWidget;
 
 impl ChestWidget {
     pub fn calculate_size(area: Rect, state: &ChestState) -> Option<(usize, usize)> {
-        let max_width = area.width as usize - 1; // subtract borders
-        let max_height = area.height as usize - 3; // subtract borders and title
+        let max_width = area.width as usize;
+        let max_height = area.height as usize;
 
         let max_cell_width = max_width.div_ceil(state.width);
 
         let mut last_ok = None;
 
         for try_cell_width in 0..max_cell_width {
-            if try_cell_width % 2 == 0 {
-                continue;
-            }
             let whole_width = try_cell_width * state.width + 1;
             let expected_cell_height =
                 (try_cell_width as f64 * CHARACTER_ASPECT_RATIO).floor() as usize;
-            if expected_cell_height % 2 == 1 || expected_cell_height <= 3 {
-                continue;
-            }
             let whole_height = expected_cell_height * state.height + 3;
 
             if whole_height <= max_height && whole_width <= max_width {
@@ -116,11 +112,13 @@ impl StatefulWidget for ChestWidget {
                     .style(style)
                     .alignment(Alignment::Center);
                 let quant = Paragraph::new(format!("x{:02}", quant))
-                    .style(if state.selected == (slot_x, slot_y) {
-                        Style::default().bg(Color::LightBlue)
-                    } else {
-                        Style::default()
-                    })
+                    .style(
+                        if state.show_selected && state.selected == (slot_x, slot_y) {
+                            Style::default().bg(Color::LightBlue)
+                        } else {
+                            Style::default()
+                        },
+                    )
                     .alignment(Alignment::Center);
 
                 let block = Block::default()

@@ -3,7 +3,10 @@ use crate::{
     tui::{
         Component, EventContext, EventResult,
         application::ApplicationTab,
-        components::chest::{ChestState, ChestWidget},
+        components::{
+            chest::{ChestState, ChestWidget},
+            text_input::{TextInputState, TextInputWidget},
+        },
         limit_area_height, limit_area_width,
     },
 };
@@ -16,11 +19,44 @@ use ratatui::{
     widgets::{Paragraph, StatefulWidget, Widget},
 };
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Focus {
+    #[default]
+    Outside,
+    Chest,
+    CoordX,
+    CoordZ,
+}
+
 pub struct BuriedTreasureTabState {
-    pub has_buried_treasure: bool,
     pub contents: ChestState,
-    pub bt_contents: SingleChest,
+    pub focus: Focus,
+    pub xstate: TextInputState<i32>,
+    pub zstate: TextInputState<i32>,
+}
+
+impl Default for BuriedTreasureTabState {
+    fn default() -> Self {
+        let mut value = Self {
+            contents: ChestState::default(),
+            focus: Focus::default(),
+            xstate: TextInputState::default(),
+            zstate: TextInputState::default(),
+        };
+        value.xstate.style.title = "Treasure X (i32)".to_string();
+        value.zstate.style.title = "Treasure Z (i32)".to_string();
+
+        value
+    }
+}
+
+#[derive(Default)]
+pub struct BuriedTreasureTabSharedData {
+    pub contents: SingleChest,
+    pub pos_x: i32,
+    pub pos_z: i32,
+    pub luck: f32,
+    pub usable: bool,
 }
 
 #[derive(Default)]
@@ -29,10 +65,10 @@ pub struct BuriedTreasureTabComponent;
 make_full_component!(BuriedTreasureTab, state: BuriedTreasureTabState, component: BuriedTreasureTabComponent);
 
 impl BuriedTreasureTab {
-    pub fn apptab() -> ApplicationTab {
+    pub fn apptab() -> ApplicationTab<Self> {
         ApplicationTab {
             title: "Buried Treasure".to_string(),
-            component: BuriedTreasureTab::boxed(),
+            component: BuriedTreasureTab::create(),
         }
     }
 }
@@ -42,7 +78,7 @@ use mcseedcracker::{
         COOKED_COD, COOKED_SALMON, DIAMOND, EMERALD, GOLD_INGOT, HEART_OF_THE_SEA, IRON_INGOT,
         IRON_SWORD, LEATHER_CHESTPLATE, PRISMARINE_CRYSTALS, TNT,
     },
-    loot_table::SingleChest,
+    loot_table::{ItemStack, SingleChest},
 };
 
 #[inline(always)]
@@ -63,10 +99,18 @@ fn item_to_string(item: usize) -> &'static str {
     }
 }
 
-impl StatefulWidget for BuriedTreasureTabComponent {
+impl BuriedTreasureTabComponent {}
+
+impl Component for BuriedTreasureTabComponent {
     type State = BuriedTreasureTabState;
 
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+    fn render(
+        self,
+        area: Rect,
+        buf: &mut Buffer,
+        state: &mut Self::State,
+        shared: &mut SharedApplicationState,
+    ) {
         let values = [
             ("Cooked ", "C", "od"),
             ("Cooked ", "S", "almon"),
@@ -111,10 +155,18 @@ impl StatefulWidget for BuriedTreasureTabComponent {
         // show controls
         let present_text =
             Paragraph::new("Buried treasure available: ").style(Style::new().fg(Color::White));
-        let present_value = if state.has_buried_treasure {
-            Paragraph::new("yes").style(Style::new().fg(Color::Green))
+        let present_value = if shared.buried_treasure_data.usable {
+            Paragraph::new("yes").style(if state.focus == Focus::Chest {
+                Style::new().fg(Color::White).bold().bg(Color::Green)
+            } else {
+                Style::new().fg(Color::Green)
+            })
         } else {
-            Paragraph::new("no").style(Style::new().fg(Color::Red))
+            Paragraph::new("no").style(if state.focus == Focus::Chest {
+                Style::new().fg(Color::White).bold().bg(Color::Red)
+            } else {
+                Style::new().fg(Color::Red)
+            })
         };
 
         let l1 = Paragraph::new("Gneral controls").style(Style::default().fg(Color::Yellow).bold());
@@ -142,9 +194,19 @@ impl StatefulWidget for BuriedTreasureTabComponent {
 
         present_text.render(controls_area, buf);
         present_value.render(
-            controls_area
-                .offset(Offset { x: 27, y: 0 })
-                .intersection(controls_area),
+            limit_area_height(
+                limit_area_width(
+                    controls_area,
+                    if shared.buried_treasure_data.usable {
+                        3
+                    } else {
+                        2
+                    },
+                ),
+                1,
+            )
+            .offset(Offset { x: 27, y: 0 })
+            .intersection(controls_area),
             buf,
         );
 
@@ -213,18 +275,76 @@ impl StatefulWidget for BuriedTreasureTabComponent {
             );
         }
 
-        if state.has_buried_treasure {
+        if state.xstate.validator.is_none() {
+            state.xstate.validator = Some(Box::new(|value, _cursor, style, i| {
+                if value.len() > 15 {
+                    style.cursor_style.bg = Some(Color::Red);
+                    style.text_style.fg = Some(Color::Red);
+                } else if let Ok(n) = value.iter().collect::<String>().parse::<i32>() {
+                    style.text_style.fg = Some(Color::White);
+                    style.cursor_style.bg = Some(Color::Green);
+                    *i = n;
+                } else {
+                    style.cursor_style.bg = Some(Color::Red);
+                    style.text_style.fg = Some(Color::Red);
+                }
+            }));
+        }
+        if state.zstate.validator.is_none() {
+            state.zstate.validator = Some(Box::new(|value, _cursor, style, i| {
+                if value.len() > 15 {
+                    style.cursor_style.bg = Some(Color::Red);
+                    style.text_style.fg = Some(Color::Red);
+                } else if let Ok(n) = value.iter().collect::<String>().parse::<i32>() {
+                    style.text_style.fg = Some(Color::White);
+                    style.cursor_style.bg = Some(Color::Green);
+                    *i = n;
+                } else {
+                    style.cursor_style.bg = Some(Color::Red);
+                    style.text_style.fg = Some(Color::Red);
+                }
+            }));
+        }
+
+        state.xstate.style.border_style = Style::default().fg(Color::White);
+        state.zstate.style.border_style = Style::default().fg(Color::White);
+        state.xstate.style.show_cursor = false;
+        state.zstate.style.show_cursor = false;
+
+        if state.focus == Focus::CoordX {
+            state.xstate.style.border_style = Style::default().fg(Color::LightCyan);
+            state.xstate.style.show_cursor = true;
+        } else if state.focus == Focus::CoordZ {
+            state.zstate.style.border_style = Style::default().fg(Color::LightCyan);
+            state.zstate.style.show_cursor = true;
+        }
+
+        if vert {
+            TextInputWidget::default().render(
+                limit_area_width(limit_area_height(area, 3), (area.width - 82).min(30))
+                    .offset(Offset { x: 80, y: 0 }),
+                buf,
+                &mut state.xstate,
+            );
+            TextInputWidget::default().render(
+                limit_area_width(limit_area_height(area, 3), (area.width - 82).min(30))
+                    .offset(Offset { x: 80, y: 3 }),
+                buf,
+                &mut state.zstate,
+            );
+        }
+
+        if shared.buried_treasure_data.usable {
             let chest = ChestWidget;
 
             chest.render(contents_area, buf, &mut state.contents);
         }
     }
-}
 
-impl Component for BuriedTreasureTabComponent {
     fn handle_event(
         self,
         state: &mut Self::State,
+        shared: &mut SharedApplicationState,
         event: Event,
         context: EventContext,
     ) -> EventResult {
@@ -247,91 +367,192 @@ impl Component for BuriedTreasureTabComponent {
         }
 
         match context {
-            EventContext::BubblingDown => match &event {
-                Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
-                    KeyCode::Char(' ') => {
-                        state.has_buried_treasure = !state.has_buried_treasure;
-                        EventResult::Captured
-                    }
-                    KeyCode::Char(c) if char_to_item(c.to_ascii_lowercase()).is_some() => {
-                        let item = char_to_item(c.to_ascii_lowercase()).unwrap();
-
-                        state.contents.contents[state.contents.selected.1]
-                            [state.contents.selected.0] = (
-                            item_to_string(item).to_string(),
-                            state.contents.contents[state.contents.selected.1]
-                                [state.contents.selected.0]
-                                .1
-                                .max(1),
-                            if item == HEART_OF_THE_SEA {
-                                Style::default().fg(Color::Yellow).not_bold()
-                            } else {
-                                Style::default().fg(Color::White).not_bold()
-                            },
-                        );
-                        EventResult::Captured
-                    }
-                    KeyCode::Right => {
-                        state.contents.selected.0 =
-                            (state.contents.selected.0 + 1) % state.contents.width;
-                        EventResult::Captured
-                    }
-                    KeyCode::Left => {
-                        state.contents.selected.0 =
-                            (state.contents.selected.0 + state.contents.width - 1)
-                                % state.contents.width;
-                        EventResult::Captured
-                    }
-                    KeyCode::Down => {
-                        state.contents.selected.1 =
-                            (state.contents.selected.1 + 1) % state.contents.height;
-                        EventResult::Captured
-                    }
-                    KeyCode::Up => {
-                        state.contents.selected.1 =
-                            (state.contents.selected.1 + state.contents.height - 1)
-                                % state.contents.height;
-                        EventResult::Captured
-                    }
-                    KeyCode::Char(c) if state.has_buried_treasure && c.is_ascii_digit() => {
-                        let count = &mut state.contents.contents[state.contents.selected.1]
-                            [state.contents.selected.0]
-                            .1;
-
-                        let res = (*count * 10 + c.to_digit(10).unwrap() as i32) % 100;
-                        *count = res;
-
-                        if let Some(bt) = &mut state.bt_contents.rows[state.contents.selected.1]
-                            .items[state.contents.selected.0]
+            EventContext::BubblingDown => {
+                if state.focus == Focus::CoordX {
+                    return match TextInputWidget::handle_event(
+                        &mut state.xstate,
+                        event,
+                        EventContext::BubblingDown,
+                        &mut shared.buried_treasure_data.pos_x,
+                    ) {
+                        EventResult::BubbleUp(event) => {
+                            self.handle_event(state, shared, event, EventContext::BubblingUp)
+                        }
+                        result => result,
+                    };
+                } else if state.focus == Focus::CoordZ {
+                    return match TextInputWidget::handle_event(
+                        &mut state.zstate,
+                        event,
+                        EventContext::BubblingDown,
+                        &mut shared.buried_treasure_data.pos_z,
+                    ) {
+                        EventResult::BubbleUp(event) => {
+                            self.handle_event(state, shared, event, EventContext::BubblingUp)
+                        }
+                        result => result,
+                    };
+                } else if state.focus == Focus::Outside {
+                    return match &event {
+                        Event::Key(key)
+                            if key.code == KeyCode::Tab && key.kind != KeyEventKind::Release =>
                         {
-                            bt.count = res;
+                            state.focus = Focus::CoordX;
+                            EventResult::Captured
                         }
+                        _ => EventResult::BubbleUp(event),
+                    };
+                }
+                match &event {
+                    Event::Key(key) if key.kind != KeyEventKind::Release => match key.code {
+                        KeyCode::Char(' ') => {
+                            shared.buried_treasure_data.usable =
+                                !shared.buried_treasure_data.usable;
+                            EventResult::Captured
+                        }
+                        KeyCode::Char(c) if char_to_item(c.to_ascii_lowercase()).is_some() => {
+                            let item = char_to_item(c.to_ascii_lowercase()).unwrap();
 
-                        EventResult::Captured
-                    }
-                    KeyCode::Backspace | KeyCode::Delete if state.has_buried_treasure => {
-                        if key.modifiers.contains(KeyModifiers::SHIFT) {
-                            state.contents.contents.iter_mut().for_each(|row| {
-                                row.iter_mut().for_each(|item| {
-                                    *item = ("".to_string(), 0, Style::default());
-                                });
-                            });
-                            state.bt_contents = SingleChest::new();
-                        } else {
                             state.contents.contents[state.contents.selected.1]
-                                [state.contents.selected.0] = ("".to_string(), 0, Style::default());
-                            state.bt_contents.rows[state.contents.selected.1].items
-                                [state.contents.selected.0] = None;
-                        }
+                                [state.contents.selected.0] = (
+                                item_to_string(item).to_string(),
+                                state.contents.contents[state.contents.selected.1]
+                                    [state.contents.selected.0]
+                                    .1
+                                    .max(1),
+                                if item == HEART_OF_THE_SEA {
+                                    Style::default().fg(Color::Yellow).not_bold()
+                                } else {
+                                    Style::default().fg(Color::White).not_bold()
+                                },
+                            );
 
-                        EventResult::Captured
-                    }
+                            shared.buried_treasure_data.contents.rows[state.contents.selected.1]
+                                .items[state.contents.selected.0] = Some(ItemStack::new(
+                                item,
+                                state.contents.contents[state.contents.selected.1]
+                                    [state.contents.selected.0]
+                                    .1,
+                                if item == IRON_SWORD || item == LEATHER_CHESTPLATE {
+                                    1
+                                } else {
+                                    64
+                                },
+                            ));
+
+                            EventResult::Captured
+                        }
+                        KeyCode::Right => {
+                            state.contents.selected.0 =
+                                (state.contents.selected.0 + 1) % state.contents.width;
+                            EventResult::Captured
+                        }
+                        KeyCode::Left => {
+                            state.contents.selected.0 =
+                                (state.contents.selected.0 + state.contents.width - 1)
+                                    % state.contents.width;
+                            EventResult::Captured
+                        }
+                        KeyCode::Down => {
+                            state.contents.selected.1 =
+                                (state.contents.selected.1 + 1) % state.contents.height;
+                            EventResult::Captured
+                        }
+                        KeyCode::Up => {
+                            state.contents.selected.1 =
+                                (state.contents.selected.1 + state.contents.height - 1)
+                                    % state.contents.height;
+                            EventResult::Captured
+                        }
+                        KeyCode::Char(c)
+                            if shared.buried_treasure_data.usable && c.is_ascii_digit() =>
+                        {
+                            let count = &mut state.contents.contents[state.contents.selected.1]
+                                [state.contents.selected.0]
+                                .1;
+
+                            let res = (*count * 10 + c.to_digit(10).unwrap() as i32) % 100;
+                            *count = res;
+
+                            if let Some(bt) = &mut shared.buried_treasure_data.contents.rows
+                                [state.contents.selected.1]
+                                .items[state.contents.selected.0]
+                            {
+                                bt.count = res;
+                            }
+
+                            EventResult::Captured
+                        }
+                        KeyCode::Tab => match state.focus {
+                            Focus::CoordX => {
+                                state.focus = Focus::CoordZ;
+                                EventResult::Captured
+                            }
+                            Focus::CoordZ => {
+                                state.focus = Focus::Chest;
+                                EventResult::Captured
+                            }
+                            Focus::Chest => {
+                                state.focus = Focus::Outside;
+                                EventResult::BubbleUp(event)
+                            }
+                            Focus::Outside => {
+                                state.focus = Focus::CoordX;
+                                EventResult::Captured
+                            }
+                        },
+                        KeyCode::Backspace | KeyCode::Delete
+                            if shared.buried_treasure_data.usable =>
+                        {
+                            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                                state.contents.contents.iter_mut().for_each(|row| {
+                                    row.iter_mut().for_each(|item| {
+                                        *item = ("".to_string(), 0, Style::default());
+                                    });
+                                });
+                                shared.buried_treasure_data.contents = SingleChest::new();
+                            } else {
+                                state.contents.contents[state.contents.selected.1]
+                                    [state.contents.selected.0] =
+                                    ("".to_string(), 0, Style::default());
+                                shared.buried_treasure_data.contents.rows
+                                    [state.contents.selected.1]
+                                    .items[state.contents.selected.0] = None;
+                            }
+
+                            EventResult::Captured
+                        }
+                        _ => EventResult::BubbleUp(event),
+                    },
                     _ => EventResult::BubbleUp(event),
-                },
+                }
+            }
+
+            EventContext::BubblingUp => match &event {
+                Event::Key(key)
+                    if key.code == KeyCode::Tab && key.kind != KeyEventKind::Release =>
+                {
+                    match state.focus {
+                        Focus::CoordX => {
+                            state.focus = Focus::CoordZ;
+                            EventResult::Captured
+                        }
+                        Focus::CoordZ => {
+                            state.focus = Focus::Chest;
+                            EventResult::Captured
+                        }
+                        Focus::Chest => {
+                            state.focus = Focus::Outside;
+                            EventResult::BubbleUp(event)
+                        }
+                        Focus::Outside => {
+                            state.focus = Focus::CoordX;
+                            EventResult::Captured
+                        }
+                    }
+                }
                 _ => EventResult::BubbleUp(event),
             },
-
-            EventContext::BubblingUp => EventResult::BubbleUp(event),
         }
     }
 }

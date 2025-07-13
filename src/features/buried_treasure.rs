@@ -27,6 +27,7 @@ pub mod items {
     pub const COOKED_SALMON: usize = 11;
 }
 
+#[inline(always)]
 pub const fn generates_at(world_seed: i64, chunk_pos: (i32, i32)) -> bool {
     random_with_region_seed(world_seed, chunk_pos.0, chunk_pos.1, SALT)
         .0
@@ -34,6 +35,7 @@ pub const fn generates_at(world_seed: i64, chunk_pos: (i32, i32)) -> bool {
         < PROB
 }
 
+#[inline(always)]
 pub const fn get_buried_treasure_random(
     world_seed: i64,
     chunk_pos: (i32, i32),
@@ -45,12 +47,14 @@ pub const fn get_buried_treasure_random(
     random_with_decorator_seed(population_seed, 1, 30)
 }
 
+#[inline(always)]
 pub const fn get_buried_treasure_loot_table_seed(world_seed: i64, chunk_pos: (i32, i32)) -> i64 {
     get_buried_treasure_random(world_seed, chunk_pos)
         .0
         .next_long()
 }
 
+#[inline]
 pub fn get_buried_treasure(world_seed: i64, chunk_pos: (i32, i32), luck: f32) -> SingleChest {
     let seed = get_buried_treasure_loot_table_seed(world_seed, chunk_pos);
     let mut chest = SingleChest::new();
@@ -58,6 +62,7 @@ pub fn get_buried_treasure(world_seed: i64, chunk_pos: (i32, i32), luck: f32) ->
     chest
 }
 
+#[inline]
 pub fn build_fast_inventory_compare_context(
     contents: SingleChest,
 ) -> FastInventoryCompareContext<SingleChest, 12> {
@@ -75,6 +80,7 @@ pub fn build_fast_inventory_compare_context(
     ctx
 }
 
+#[inline]
 pub fn compare_buried_treasure_fast(
     world_seed: i64,
     chunk_pos: (i32, i32),
@@ -86,6 +92,7 @@ pub fn compare_buried_treasure_fast(
     get_loot_table().compare_fast(JavaRandom::new(seed), luck, compare, temp_inventory)
 }
 
+#[inline]
 pub fn compare_buried_treasure_fast_noinv(
     world_seed: i64,
     chunk_pos: (i32, i32),
@@ -96,6 +103,7 @@ pub fn compare_buried_treasure_fast_noinv(
     get_loot_table().compare_fast_noinv(JavaRandom::new(seed), luck, compare)
 }
 
+#[inline]
 pub fn get_loot_table() -> LootTable {
     LootTableBuilder::new()
         .pool(

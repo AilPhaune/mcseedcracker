@@ -16,10 +16,12 @@ pub struct EndPillar {
 }
 
 impl EndPillars {
+    #[inline(always)]
     pub const fn pillar_seed(world_seed: i64) -> i64 {
         JavaRandom::new(world_seed).next_long() & 0xFFFF
     }
 
+    #[inline(always)]
     pub const fn new() -> Self {
         Self(
             [EndPillar {
@@ -33,14 +35,17 @@ impl EndPillars {
         )
     }
 
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = &EndPillar> {
         self.0.iter()
     }
 
+    #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut EndPillar> {
         self.0.iter_mut()
     }
 
+    #[inline]
     pub fn from_seed(&mut self, pillar_seed: i64) {
         let mut rng = JavaRandom::new(pillar_seed);
 
@@ -98,6 +103,7 @@ pub enum PillarMatchResult {
 }
 
 impl PillarMatchResult {
+    #[inline(always)]
     pub const fn combine(self, other: Self) -> Self {
         match (self, other) {
             (PillarMatchResult::ImpossibleMatch, _) | (_, PillarMatchResult::ImpossibleMatch) => {
@@ -110,6 +116,7 @@ impl PillarMatchResult {
         }
     }
 
+    #[inline(always)]
     pub const fn compare(&self, other: &Self) -> Ordering {
         match (self, other) {
             (PillarMatchResult::ImpossibleMatch, PillarMatchResult::ImpossibleMatch)
@@ -126,30 +133,35 @@ impl PillarMatchResult {
                 } else if *w1 == *w2 {
                     Ordering::Equal
                 } else {
-                    Ordering::Less
+                    Ordering::Greater
                 }
             }
         }
     }
 
+    #[inline(always)]
     pub fn is_exact_match(&self) -> bool {
         matches!(self, PillarMatchResult::ExactMatch)
     }
 
+    #[inline(always)]
     pub fn is_impossible_match(&self) -> bool {
         matches!(self, PillarMatchResult::ImpossibleMatch)
     }
 
+    #[inline(always)]
     pub fn is_possible_match(&self) -> bool {
         matches!(self, PillarMatchResult::PossibleMatch(_))
     }
 }
 
 impl PartialEndPillar {
+    #[inline(always)]
     pub const fn new(caged: Option<bool>, height: PillarHeightHint) -> Self {
         Self { caged, height }
     }
 
+    #[inline]
     pub const fn matches(&self, pillar: &EndPillar) -> PillarMatchResult {
         let cage_match = match self.caged {
             Some(caged) => {
@@ -241,6 +253,7 @@ impl PartialEndPillar {
 pub struct PartialEndPillars(pub [PartialEndPillar; 10]);
 
 impl PartialEndPillars {
+    #[inline(always)]
     pub const fn new() -> Self {
         Self(
             [PartialEndPillar {
@@ -250,14 +263,17 @@ impl PartialEndPillars {
         )
     }
 
+    #[inline(always)]
     pub fn iter(&self) -> impl Iterator<Item = &PartialEndPillar> {
         self.0.iter()
     }
 
+    #[inline(always)]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut PartialEndPillar> {
         self.0.iter_mut()
     }
 
+    #[inline]
     pub fn matches(&self, pillars: &EndPillars) -> PillarMatchResult {
         let mut result = PillarMatchResult::ExactMatch;
         for (pillar, partial_pillar) in pillars.iter().zip(self.iter()) {
@@ -269,6 +285,7 @@ impl PartialEndPillars {
         result
     }
 
+    #[inline]
     pub fn seed_results(&self) -> Vec<(i64, PillarMatchResult)> {
         let mut pillars = EndPillars::new();
         let mut results = Vec::new();

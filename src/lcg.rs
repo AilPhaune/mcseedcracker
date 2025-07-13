@@ -31,6 +31,7 @@ SOFTWARE.
 
 */
 
+#[derive(Debug, Clone)]
 pub struct LinearCongruentialGenerator {
     multiplier: i64,
     increment: i64,
@@ -43,7 +44,11 @@ pub struct LinearCongruentialGenerator {
 pub const JAVA_RANDOM: LinearCongruentialGenerator =
     LinearCongruentialGenerator::new(0x5DEECE66D, 0xB, 1i64 << 48);
 
+pub const JAVA_RANDOM_REV1: LinearCongruentialGenerator = JAVA_RANDOM.combine(-1);
+pub const JAVA_RANDOM_REV2: LinearCongruentialGenerator = JAVA_RANDOM.combine(-2);
+
 impl LinearCongruentialGenerator {
+    #[inline(always)]
     pub const fn new(multiplier: i64, increment: i64, modulus: i64) -> Self {
         let p2 = (modulus & (modulus - 1)) == 0;
         Self {
@@ -60,30 +65,37 @@ impl LinearCongruentialGenerator {
         }
     }
 
+    #[inline(always)]
     pub const fn is_modulus_power_of_2(&self) -> bool {
         self.is_pow_2
     }
 
+    #[inline(always)]
     pub const fn get_modulus_trailing_zeros(&self) -> i32 {
         self.trailing_zeros
     }
 
+    #[inline(always)]
     pub const fn get_multiplier(&self) -> i64 {
         self.multiplier
     }
 
+    #[inline(always)]
     pub const fn get_increment(&self) -> i64 {
         self.increment
     }
 
+    #[inline(always)]
     pub const fn get_modulus(&self) -> i64 {
         self.modulus
     }
 
+    #[inline(always)]
     pub const fn is_multiplicative(&self) -> bool {
         self.increment == 0
     }
 
+    #[inline(always)]
     pub const fn next_seed(&self, seed: i64) -> i64 {
         self._mod(
             self.multiplier
@@ -92,6 +104,7 @@ impl LinearCongruentialGenerator {
         )
     }
 
+    #[inline(always)]
     pub const fn _mod(&self, x: i64) -> i64 {
         if self.is_pow_2 {
             x & (self.modulus - 1)
@@ -100,6 +113,7 @@ impl LinearCongruentialGenerator {
         }
     }
 
+    #[inline]
     pub const fn combine(&self, steps: i64) -> LinearCongruentialGenerator {
         let mut multiplier = 1i64;
         let mut increment = 0i64;
@@ -131,6 +145,7 @@ impl LinearCongruentialGenerator {
         LinearCongruentialGenerator::new(multiplier, increment, self.modulus)
     }
 
+    #[inline]
     pub const fn combine_with(
         &self,
         other: &LinearCongruentialGenerator,
@@ -149,6 +164,7 @@ impl LinearCongruentialGenerator {
         }
     }
 
+    #[inline]
     pub const fn invert(&self) -> LinearCongruentialGenerator {
         self.combine(-1)
     }

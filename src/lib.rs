@@ -4,6 +4,7 @@ pub mod lcg;
 pub mod loot_table;
 pub mod math;
 pub mod random;
+pub mod search;
 pub mod utils;
 
 pub const CHARACTER_ASPECT_RATIO: f64 = 0.5; // width/height
@@ -143,39 +144,6 @@ mod tests {
 
             let rev = lcg::JAVA_RANDOM.combine(-2);
 
-            /*let mut res_seed = None;
-            let mut temp_inventory = SingleChest::new();
-
-            for state_lo in 0i64..65536 {
-                for state_hi in 0i64..65536 {
-                    let state = (state_hi << 32) | (pillar_seed << 16) | state_lo;
-                    let reversed_state = rev.next_seed(state);
-                    let seed = reversed_state ^ lcg::JAVA_RANDOM.get_multiplier();
-
-                    if !buried_treasure::generates_at(seed, bt_chunk) {
-                        continue;
-                    }
-
-                    if buried_treasure::compare_buried_treasure_fast(
-                        seed,
-                        bt_chunk,
-                        0.0,
-                        &bt_compare_context,
-                        &mut temp_inventory,
-                    ) {
-                        if let Some(struct_seed) = res_seed {
-                            panic!(
-                                "multiple structure seeds found: last={}, new={}",
-                                struct_seed, seed
-                            );
-                        }
-                        res_seed = Some(seed);
-                    }
-                }
-            }
-
-            res_seed.expect("structure seed not found")*/
-
             let values: Vec<i64> = (0u64..(1u64 << 32))
                 .into_par_iter()
                 .filter_map(|i| {
@@ -221,39 +189,40 @@ mod tests {
         let world_seed = {
             let (x, z) = Math::relative_chunk_coords(bt_chunk, (0, 0));
 
-            let mut wseed = None;
+            let results = (0i64..65536)
+                .into_par_iter()
+                .filter_map(|seed_hi| {
+                    let seed = (seed_hi << 48) | structure_seed;
 
-            for seed_hi in 0i64..65536 {
-                let seed = (seed_hi << 48) | structure_seed;
+                    let mut generator = Generator::new(
+                        MCVersion::MC_1_16_5,
+                        seed,
+                        Dimension::DIM_OVERWORLD,
+                        GeneratorFlags::empty(),
+                    );
 
-                let mut generator = Generator::new(
-                    MCVersion::MC_1_16_5,
-                    seed,
-                    Dimension::DIM_OVERWORLD,
-                    GeneratorFlags::empty(),
-                );
-
-                if generator.get_biome_at(x, 60, z).unwrap() == BiomeID::beach
-                    && generator.get_biome_at(137, 73, -90).unwrap() == BiomeID::jungle
-                    && generator.get_biome_at(-404, 69, -51).unwrap() == BiomeID::beach
-                    && generator
-                        .verify_structure_generation_attempt(
-                            BlockPosition::new(x + 9, z + 9),
-                            StructureType::Treasure,
-                        )
-                        .unwrap()
-                {
-                    if let Some(world_seed) = wseed {
-                        panic!(
-                            "multiple world seeds found: last={}, new={}",
-                            world_seed, seed
-                        );
+                    if generator.get_biome_at(x, 60, z).unwrap() == BiomeID::beach
+                        && generator.get_biome_at(137, 73, -90).unwrap() == BiomeID::jungle
+                        && generator.get_biome_at(-404, 69, -51).unwrap() == BiomeID::beach
+                        && generator
+                            .verify_structure_generation_attempt(
+                                BlockPosition::new(x + 9, z + 9),
+                                StructureType::Treasure,
+                            )
+                            .unwrap()
+                    {
+                        Some(seed)
+                    } else {
+                        None
                     }
-                    wseed = Some(seed);
-                }
-            }
+                })
+                .collect::<Vec<_>>();
 
-            wseed.expect("World seed not found")
+            match &results[..] {
+                [] => panic!("world seed not found"),
+                [single] => *single,
+                multiple => panic!("Multiple world seeds found: {:?}", multiple),
+            }
         };
 
         println!("Found world seed {}", world_seed);

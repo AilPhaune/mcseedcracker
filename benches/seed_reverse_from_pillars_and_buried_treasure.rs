@@ -5,6 +5,7 @@ use cubiomes::{
     enums::{BiomeID, Dimension, MCVersion, StructureType},
     generator::{BlockPosition, Generator, GeneratorFlags},
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use mcseedcracker::{
     features::{
         buried_treasure::{
@@ -52,6 +53,17 @@ fn reverse_seed_from_pillars_and_buried_treasure(input: &Input) -> i64 {
         input.buried_trasure_block_coords.2,
     ));
 
+    println!();
+
+    let total = u32::MAX as u64 + 1;
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({pos}/{len})",
+        )
+        .unwrap(),
+    );
+
     let structure_seed = {
         let rev = lcg::JAVA_RANDOM.combine(-2);
 
@@ -84,10 +96,24 @@ fn reverse_seed_from_pillars_and_buried_treasure(input: &Input) -> i64 {
                     res_seed = Some(seed);
                 }
             }
+            if state_lo % 32 == 0 {
+                pb.inc(32 * 65536);
+            }
         }
+
+        pb.force_draw();
 
         res_seed.expect("structure seed not found")
     };
+
+    let total = 65536;
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({pos}/{len})",
+        )
+        .unwrap(),
+    );
 
     let world_seed =
         {
@@ -122,10 +148,17 @@ fn reverse_seed_from_pillars_and_buried_treasure(input: &Input) -> i64 {
                     }
                     wseed = Some(seed);
                 }
+
+                if seed_hi % 512 == 511 {
+                    pb.inc(512);
+                }
             }
 
             wseed.expect("World seed not found")
         };
+
+    pb.force_draw();
+    println!();
 
     assert_eq!(world_seed, -7193194438565520372i64);
     world_seed
@@ -153,35 +186,55 @@ fn reverse_seed_from_pillars_and_buried_treasure_threaded_rayon(input: &Input) -
         input.buried_trasure_block_coords.2,
     ));
 
+    println!();
+
+    let total = u32::MAX as u64 + 1;
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({pos}/{len})",
+        )
+        .unwrap(),
+    );
+
     let structure_seed = {
-        let rev = lcg::JAVA_RANDOM.combine(-2);
-
-        let results = (0u64..(1u64 << 32))
+        let results = (0i64..65536i64)
             .into_par_iter()
-            .filter_map(|i| {
-                let state_lo = i & 0xFFFF;
-                let state_hi = i >> 16;
-                let state =
-                    ((state_hi as i64) << 32) | ((pillar_seed as i64) << 16) | (state_lo as i64);
-                let reversed_state = rev.next_seed(state);
-                let seed = reversed_state ^ lcg::JAVA_RANDOM.get_multiplier();
+            .map(|state_hi| {
+                let pbref = &pb;
+                let orig = state_hi;
+                let state_hi = state_hi << 32;
+                (0i64..65536i64)
+                    .into_par_iter()
+                    .filter_map(move |state_lo| {
+                        if state_lo == 65535 && (orig % 32) == 0 {
+                            pbref.inc(32 * 65536);
+                        }
 
-                if !buried_treasure::generates_at(seed, bt_chunk) {
-                    return None;
-                }
+                        let state = state_hi | ((pillar_seed as i64) << 16) | state_lo;
+                        let reversed_state = lcg::JAVA_RANDOM_REV2.next_seed(state);
+                        let seed = reversed_state ^ lcg::JAVA_RANDOM.get_multiplier();
 
-                if buried_treasure::compare_buried_treasure_fast_noinv(
-                    seed,
-                    bt_chunk,
-                    0.0,
-                    &input.buried_treasure,
-                ) {
-                    Some(seed)
-                } else {
-                    None
-                }
+                        if !buried_treasure::generates_at(seed, bt_chunk) {
+                            return None;
+                        }
+
+                        if buried_treasure::compare_buried_treasure_fast_noinv(
+                            seed,
+                            bt_chunk,
+                            0.0,
+                            &input.buried_treasure,
+                        ) {
+                            Some(seed)
+                        } else {
+                            None
+                        }
+                    })
             })
+            .flatten()
             .collect::<Vec<_>>();
+
+        pb.force_draw();
 
         match &results[..] {
             [] => panic!("Seed not found"),
@@ -189,6 +242,15 @@ fn reverse_seed_from_pillars_and_buried_treasure_threaded_rayon(input: &Input) -
             multiple => panic!("Multiple seeds found: {:?}", multiple),
         }
     };
+
+    let total = 65536;
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({pos}/{len})",
+        )
+        .unwrap(),
+    );
 
     let world_seed =
         {
@@ -223,10 +285,17 @@ fn reverse_seed_from_pillars_and_buried_treasure_threaded_rayon(input: &Input) -
                     }
                     wseed = Some(seed);
                 }
+
+                if seed_hi % 512 == 511 {
+                    pb.inc(512);
+                }
             }
 
             wseed.expect("World seed not found")
         };
+
+    pb.force_draw();
+    println!();
 
     assert_eq!(world_seed, -7193194438565520372i64);
     world_seed
