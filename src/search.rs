@@ -226,4 +226,9 @@ impl StructureSeedSearcherHandle {
     pub fn get_pillar_seed(&self) -> i64 {
         self.searcher.pillar_seed
     }
+
+    #[inline]
+    pub fn get_progress(&self) -> u64 {
+        self.searcher.progress.load(Ordering::Relaxed)
+    }
 }

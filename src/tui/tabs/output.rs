@@ -10,7 +10,7 @@ use ratatui::{
     crossterm::event::{Event, KeyCode, KeyEventKind},
     layout::{Alignment, Constraint, Direction, Layout, Offset, Rect},
     style::{Color, Style, Stylize},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{Block, Borders, Gauge, Paragraph, Widget},
 };
 
 use crate::{
@@ -179,20 +179,84 @@ impl OutputTabComponent {
             );
 
             if state.valid_pillar_count <= 5 {
-                let find_btn = Paragraph::new("[Find structure seeds]").style(
-                    if state.focus == Focus::StructureSeedButton {
-                        Style::new().fg(Color::White).bold().bg(Color::LightMagenta)
-                    } else {
-                        Style::default().fg(Color::Yellow).not_bold()
-                    },
-                );
-                find_btn.render(
-                    get_area_centered(
-                        limit_area_width(limit_area_height(area, 1), 22),
-                        limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
-                    ),
-                    buf,
-                );
+                if let Some(searcher) = &shared.current_structure_seed_searcher {
+                    let cancel_btn = Paragraph::new("[Cancel search]").style(
+                        if state.focus == Focus::StructureSeedButton {
+                            Style::new().fg(Color::White).bold().bg(Color::LightMagenta)
+                        } else {
+                            Style::default().fg(Color::Yellow).not_bold()
+                        },
+                    );
+                    cancel_btn.render(
+                        get_area_centered(
+                            limit_area_width(limit_area_height(area, 1), 15),
+                            limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                        ),
+                        buf,
+                    );
+
+                    #[inline(always)]
+                    fn format_progress(mut value: f64) -> String {
+                        if value > 100.0 {
+                            value = 100.0;
+                        }
+                        if (value - 100.0).abs() < f64::EPSILON {
+                            "100.0".to_string()
+                        } else {
+                            format!("{:05.2}", value)
+                        }
+                    }
+
+                    let pgint = searcher.get_progress();
+                    let pg = pgint as f64 / (1i64 << 32) as f64;
+                    let pgtext = format!(
+                        "({} job{}) [{pgint:10}/4294967296] {}%",
+                        shared.structure_seed_search_jobs.len() + 1,
+                        if shared.structure_seed_search_jobs.is_empty() {
+                            ""
+                        } else {
+                            "s"
+                        },
+                        format_progress(pg * 100.0)
+                    );
+                    let pgtext_len = pgtext.len();
+                    let progress = Paragraph::new(pgtext).style(Style::new().fg(Color::Yellow));
+                    progress.render(
+                        get_area_centered(
+                            limit_area_width(limit_area_height(area, 1), pgtext_len as u16),
+                            limit_area_height(area, 1).offset(Offset { x: 0, y: 3 }),
+                        ),
+                        buf,
+                    );
+
+                    let gauge = Gauge::default()
+                        .gauge_style(Style::default().fg(Color::LightBlue).bg(Color::Gray))
+                        .ratio(pg)
+                        .use_unicode(true)
+                        .label("");
+                    gauge.render(
+                        limit_area_height(area, 1).offset(Offset { x: 0, y: 4 }),
+                        buf,
+                    );
+
+                    6
+                } else {
+                    let find_btn = Paragraph::new("[Find structure seeds]").style(
+                        if state.focus == Focus::StructureSeedButton {
+                            Style::new().fg(Color::White).bold().bg(Color::LightMagenta)
+                        } else {
+                            Style::default().fg(Color::Yellow).not_bold()
+                        },
+                    );
+                    find_btn.render(
+                        get_area_centered(
+                            limit_area_width(limit_area_height(area, 1), 22),
+                            limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                        ),
+                        buf,
+                    );
+                    3
+                }
             } else {
                 let info_text = Paragraph::new("Too many pillar seeds to search")
                     .style(Style::default().fg(Color::Red).bold().bg(Color::Reset));
@@ -203,8 +267,8 @@ impl OutputTabComponent {
                     ),
                     buf,
                 );
+                3
             }
-            3
         } else {
             let no_text = Paragraph::new("No").style(Style::default().fg(Color::Green));
             no_text.render(
@@ -428,7 +492,7 @@ impl Component for OutputTabComponent {
     ) -> EventResult {
         if (shared.current_structure_seed_searcher.is_some()
             || !shared.structure_seed_search_jobs.is_empty())
-            && (context == EventContext::BubblingDown
+            && (context == EventContext::BubblingUp
                 || !matches!(event, Event::Key(key) if key.code == KeyCode::Enter))
         {
             return EventResult::Captured;
@@ -450,6 +514,20 @@ impl Component for OutputTabComponent {
                     }
                 }
                 Event::Key(key) if key.kind != KeyEventKind::Release => match state.focus {
+                    Focus::StructureSeedButton
+                        if key.code == KeyCode::Enter
+                            && shared.current_structure_seed_searcher.is_some() =>
+                    {
+                        if let Some(job) = shared.current_structure_seed_searcher.take() {
+                            shared.structure_seed_search_jobs.clear();
+                            job.cancel_join().unwrap();
+
+                            EventResult::Captured
+                        } else {
+                            // dafuk ?
+                            EventResult::BubbleUp(event)
+                        }
+                    }
                     Focus::StructureSeedButton
                         if key.code == KeyCode::Enter
                             && shared.last_structure_seed_sim.outdated_data =>
