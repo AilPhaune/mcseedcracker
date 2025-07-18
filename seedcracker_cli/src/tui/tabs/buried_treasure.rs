@@ -337,6 +337,8 @@ impl Component for BuriedTreasureTabComponent {
         if shared.buried_treasure_data.usable {
             let chest = ChestWidget;
 
+            state.contents.show_selected = state.focus == Focus::Chest;
+
             chest.render(contents_area, buf, &mut state.contents);
         }
     }
@@ -349,19 +351,19 @@ impl Component for BuriedTreasureTabComponent {
         context: EventContext,
     ) -> EventResult {
         #[inline(always)]
-        const fn char_to_item(c: char) -> Option<usize> {
+        const fn char_to_item(c: char) -> Option<(usize, Color)> {
             match c {
-                'c' => Some(COOKED_COD),
-                's' => Some(COOKED_SALMON),
-                'd' => Some(DIAMOND),
-                'e' => Some(EMERALD),
-                'g' => Some(GOLD_INGOT),
-                'h' => Some(HEART_OF_THE_SEA),
-                'i' => Some(IRON_INGOT),
-                'w' => Some(IRON_SWORD),
-                'l' => Some(LEATHER_CHESTPLATE),
-                'p' => Some(PRISMARINE_CRYSTALS),
-                't' => Some(TNT),
+                'c' => Some((COOKED_COD, Color::Indexed(186))),
+                's' => Some((COOKED_SALMON, Color::Indexed(202))),
+                'd' => Some((DIAMOND, Color::LightCyan)),
+                'e' => Some((EMERALD, Color::Indexed(28))),
+                'g' => Some((GOLD_INGOT, Color::LightYellow)),
+                'h' => Some((HEART_OF_THE_SEA, Color::Blue)),
+                'i' => Some((IRON_INGOT, Color::DarkGray)),
+                'w' => Some((IRON_SWORD, Color::DarkGray)),
+                'l' => Some((LEATHER_CHESTPLATE, Color::Indexed(172))),
+                'p' => Some((PRISMARINE_CRYSTALS, Color::Indexed(79))),
+                't' => Some((TNT, Color::LightRed)),
                 _ => None,
             }
         }
@@ -411,7 +413,7 @@ impl Component for BuriedTreasureTabComponent {
                             EventResult::Captured
                         }
                         KeyCode::Char(c) if char_to_item(c.to_ascii_lowercase()).is_some() => {
-                            let item = char_to_item(c.to_ascii_lowercase()).unwrap();
+                            let (item, fg) = char_to_item(c.to_ascii_lowercase()).unwrap();
 
                             state.contents.contents[state.contents.selected.1]
                                 [state.contents.selected.0] = (
@@ -420,11 +422,7 @@ impl Component for BuriedTreasureTabComponent {
                                     [state.contents.selected.0]
                                     .1
                                     .max(1),
-                                if item == HEART_OF_THE_SEA {
-                                    Style::default().fg(Color::Yellow).not_bold()
-                                } else {
-                                    Style::default().fg(Color::White).not_bold()
-                                },
+                                Style::default().fg(fg).not_bold(),
                             );
 
                             shared.buried_treasure_data.contents.rows[state.contents.selected.1]
