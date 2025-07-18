@@ -1,9 +1,9 @@
-use std::{iter, marker::PhantomData};
+use std::{iter, marker::PhantomData, time::SystemTime};
 
 use ratatui::{
     buffer::Buffer,
-    crossterm::event::{Event, KeyCode},
-    layout::Rect,
+    crossterm::event::{Event, KeyCode, KeyModifiers},
+    layout::{Position, Rect},
     style::{Color, Style},
     symbols::border,
     widgets::{Block, Borders, StatefulWidget, Widget},
@@ -22,9 +22,8 @@ pub struct TextInputStyle {
     pub show_cursor: bool,
     pub cursor_state: bool,
     pub cursor_blink: bool,
-    pub blink_count: i64,
-    pub blink_on_time: i64,
-    pub blink_off_time: i64,
+    pub blink_on_time_ms: u64,
+    pub blink_off_time_ms: u64,
 }
 
 impl Default for TextInputStyle {
@@ -40,19 +39,38 @@ impl Default for TextInputStyle {
             show_cursor: true,
             cursor_blink: true,
             cursor_state: false,
-            blink_count: 0,
-            blink_off_time: 3,
-            blink_on_time: 3,
+            blink_off_time_ms: 500,
+            blink_on_time_ms: 500,
         }
     }
 }
 
+#[allow(clippy::type_complexity)]
+pub type Validator<T> =
+    Option<Box<dyn Fn(&mut Vec<char>, &mut usize, &mut TextInputStyle, &mut T)>>;
+
 pub struct TextInputState<T> {
-    #[allow(clippy::type_complexity)]
-    pub validator: Option<Box<dyn Fn(&mut Vec<char>, &mut usize, &mut TextInputStyle, &mut T)>>,
+    pub validator: Validator<T>,
     pub value: Vec<char>,
     pub cursor: usize,
     pub style: TextInputStyle,
+    pub last_render: Rect,
+}
+
+impl<T> TextInputState<T> {
+    pub fn in_rect(&self, x: u16, y: u16) -> bool {
+        self.last_render.contains(Position::new(x, y))
+    }
+
+    pub fn new<U>(title: U, validator: Validator<T>) -> Self
+    where
+        U: ToString,
+    {
+        let mut state = Self::default();
+        state.style.title = title.to_string();
+        state.validator = validator;
+        state
+    }
 }
 
 impl<T> Default for TextInputState<T> {
@@ -62,13 +80,19 @@ impl<T> Default for TextInputState<T> {
             cursor: 0,
             validator: None,
             style: TextInputStyle::default(),
+            last_render: Rect::default(),
         }
     }
 }
 
-#[derive(Default)]
 pub struct TextInputWidget<T> {
     ph: PhantomData<T>,
+}
+
+impl<T> Default for TextInputWidget<T> {
+    fn default() -> Self {
+        Self { ph: PhantomData }
+    }
 }
 
 impl<T> TextInputWidget<T> {
@@ -82,7 +106,7 @@ impl<T> TextInputWidget<T> {
             EventContext::BubblingUp => EventResult::BubbleUp(event),
             EventContext::BubblingDown => match &event {
                 Event::Key(key) => match key.code {
-                    KeyCode::Char(c) => {
+                    KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         state.value.insert(state.cursor, c);
                         state.cursor += 1;
                         if let Some(validator) = &state.validator {
@@ -95,7 +119,7 @@ impl<T> TextInputWidget<T> {
                         }
                         EventResult::Captured
                     }
-                    KeyCode::Backspace => {
+                    KeyCode::Backspace if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if state.cursor > 0 {
                             state.value.remove(state.cursor - 1);
                             state.cursor -= 1;
@@ -110,7 +134,7 @@ impl<T> TextInputWidget<T> {
                         }
                         EventResult::Captured
                     }
-                    KeyCode::Delete => {
+                    KeyCode::Delete if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if state.cursor < state.value.len() {
                             state.value.remove(state.cursor);
                         }
@@ -124,23 +148,23 @@ impl<T> TextInputWidget<T> {
                         }
                         EventResult::Captured
                     }
-                    KeyCode::Left => {
+                    KeyCode::Left if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if state.cursor > 0 {
                             state.cursor -= 1;
                         }
                         EventResult::Captured
                     }
-                    KeyCode::Right => {
+                    KeyCode::Right if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if state.cursor < state.value.len() {
                             state.cursor += 1;
                         }
                         EventResult::Captured
                     }
-                    KeyCode::Home => {
+                    KeyCode::Home if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         state.cursor = 0;
                         EventResult::Captured
                     }
-                    KeyCode::End => {
+                    KeyCode::End if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                         state.cursor = state.value.len();
                         EventResult::Captured
                     }
@@ -177,6 +201,8 @@ impl<T> StatefulWidget for TextInputWidget<T> {
     type State = TextInputState<T>;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        state.last_render = area;
+
         let blk = Block::new()
             .borders(Borders::ALL)
             .border_set(state.style.border_set)
@@ -192,16 +218,15 @@ impl<T> StatefulWidget for TextInputWidget<T> {
         let begin_i = state.value.len().saturating_sub(inner_l);
 
         if state.style.cursor_blink {
-            state.style.blink_count += 1;
-            if state.style.cursor_state && state.style.blink_count >= state.style.blink_on_time {
-                state.style.cursor_state = false;
-                state.style.blink_count = 0;
-            } else if !state.style.cursor_state
-                && state.style.blink_count >= state.style.blink_off_time
-            {
-                state.style.cursor_state = true;
-                state.style.blink_count = 0;
-            }
+            let total_cycle_ms =
+                state.style.blink_on_time_ms as u128 + state.style.blink_off_time_ms as u128;
+            let from_cycle_start = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+                % total_cycle_ms;
+
+            state.style.cursor_state = from_cycle_start < state.style.blink_on_time_ms as u128;
         }
 
         for (i, c) in state.value[begin_i..]
@@ -232,4 +257,22 @@ impl<T> StatefulWidget for TextInputWidget<T> {
             }
         }
     }
+}
+
+pub fn i32_validator() -> Validator<i32> {
+    Some(Box::new(
+        |value: &mut Vec<char>, _: &mut usize, style: &mut TextInputStyle, i: &mut i32| {
+            if value.len() > 15 {
+                style.cursor_style.bg = Some(Color::Red);
+                style.text_style.fg = Some(Color::Red);
+            } else if let Ok(n) = value.iter().collect::<String>().parse::<i32>() {
+                style.text_style.fg = Some(Color::White);
+                style.cursor_style.bg = Some(Color::Green);
+                *i = n;
+            } else {
+                style.cursor_style.bg = Some(Color::Red);
+                style.text_style.fg = Some(Color::Red);
+            }
+        },
+    ))
 }

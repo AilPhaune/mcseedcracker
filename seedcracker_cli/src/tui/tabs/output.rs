@@ -410,7 +410,7 @@ impl Component for OutputTabComponent {
     type State = OutputTabState;
 
     fn render(
-        self,
+        &self,
         area: Rect,
         buf: &mut Buffer,
         state: &mut Self::State,
@@ -484,7 +484,7 @@ impl Component for OutputTabComponent {
     }
 
     fn handle_event(
-        self,
+        &self,
         state: &mut Self::State,
         shared: &mut SharedApplicationState,
         event: Event,

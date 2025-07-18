@@ -99,13 +99,11 @@ fn item_to_string(item: usize) -> &'static str {
     }
 }
 
-impl BuriedTreasureTabComponent {}
-
 impl Component for BuriedTreasureTabComponent {
     type State = BuriedTreasureTabState;
 
     fn render(
-        self,
+        &self,
         area: Rect,
         buf: &mut Buffer,
         state: &mut Self::State,
@@ -169,7 +167,8 @@ impl Component for BuriedTreasureTabComponent {
             })
         };
 
-        let l1 = Paragraph::new("Gneral controls").style(Style::default().fg(Color::Yellow).bold());
+        let l1 =
+            Paragraph::new("General controls").style(Style::default().fg(Color::Yellow).bold());
         let l2_1 = Paragraph::new("[LEFT] [RIGHT] [UP] [DOWN]")
             .style(Style::default().fg(Color::Magenta).not_bold());
         let l2_2 =
@@ -212,24 +211,60 @@ impl Component for BuriedTreasureTabComponent {
 
         let controls_area = limit_area_height(area, 1);
 
-        l1.render(controls_area.offset(Offset { x: 0, y: 3 }), buf);
-        l2_1.render(controls_area.offset(Offset { x: 0, y: 4 }), buf);
-        l2_2.render(controls_area.offset(Offset { x: 26, y: 4 }), buf);
-        l3_1.render(controls_area.offset(Offset { x: 0, y: 5 }), buf);
-        l3_2.render(controls_area.offset(Offset { x: 7, y: 5 }), buf);
-        l4_1.render(controls_area.offset(Offset { x: 0, y: 6 }), buf);
-        l4_2.render(controls_area.offset(Offset { x: 13, y: 6 }), buf);
-        l5.render(controls_area.offset(Offset { x: 0, y: 8 }), buf);
-        l6_1.render(controls_area.offset(Offset { x: 0, y: 9 }), buf);
-        l6_2.render(controls_area.offset(Offset { x: 39, y: 9 }), buf);
-        l7_1.render(controls_area.offset(Offset { x: 0, y: 10 }), buf);
-        l7_2.render(controls_area.offset(Offset { x: 17, y: 10 }), buf);
+        l1.render(
+            limit_area_width(controls_area, 16).offset(Offset { x: 0, y: 3 }),
+            buf,
+        );
+        l2_1.render(
+            limit_area_width(controls_area, 26).offset(Offset { x: 0, y: 4 }),
+            buf,
+        );
+        l2_2.render(
+            limit_area_width(controls_area, 15).offset(Offset { x: 26, y: 4 }),
+            buf,
+        );
+        l3_1.render(
+            limit_area_width(controls_area, 7).offset(Offset { x: 0, y: 5 }),
+            buf,
+        );
+        l3_2.render(
+            limit_area_width(controls_area, 36).offset(Offset { x: 7, y: 5 }),
+            buf,
+        );
+        l4_1.render(
+            limit_area_width(controls_area, 13).offset(Offset { x: 0, y: 6 }),
+            buf,
+        );
+        l4_2.render(
+            limit_area_width(controls_area, 11).offset(Offset { x: 13, y: 6 }),
+            buf,
+        );
+        l5.render(
+            limit_area_width(controls_area, 14).offset(Offset { x: 0, y: 8 }),
+            buf,
+        );
+        l6_1.render(
+            limit_area_width(controls_area, 39).offset(Offset { x: 0, y: 9 }),
+            buf,
+        );
+        l6_2.render(
+            limit_area_width(controls_area, 13).offset(Offset { x: 39, y: 9 }),
+            buf,
+        );
+        l7_1.render(
+            limit_area_width(controls_area, 17).offset(Offset { x: 0, y: 10 }),
+            buf,
+        );
+        l7_2.render(
+            limit_area_width(controls_area, 12).offset(Offset { x: 17, y: 10 }),
+            buf,
+        );
 
         let mut y = if vert { 0 } else { 12 };
         Paragraph::new("Set item")
             .style(Style::default().fg(Color::Yellow).bold())
             .render(
-                controls_area.offset(Offset {
+                limit_area_width(controls_area, 8).offset(Offset {
                     x: if vert { 55 } else { 0 },
                     y,
                 }),
@@ -321,14 +356,20 @@ impl Component for BuriedTreasureTabComponent {
 
         if vert {
             TextInputWidget::default().render(
-                limit_area_width(limit_area_height(area, 3), (area.width - 82).min(30))
-                    .offset(Offset { x: 80, y: 0 }),
+                limit_area_width(
+                    limit_area_height(area, 3),
+                    area.width.saturating_sub(82).min(30).max(10),
+                )
+                .offset(Offset { x: 80, y: 0 }),
                 buf,
                 &mut state.xstate,
             );
             TextInputWidget::default().render(
-                limit_area_width(limit_area_height(area, 3), (area.width - 82).min(30))
-                    .offset(Offset { x: 80, y: 3 }),
+                limit_area_width(
+                    limit_area_height(area, 3),
+                    area.width.saturating_sub(82).min(30).max(10),
+                )
+                .offset(Offset { x: 80, y: 3 }),
                 buf,
                 &mut state.zstate,
             );
@@ -344,7 +385,7 @@ impl Component for BuriedTreasureTabComponent {
     }
 
     fn handle_event(
-        self,
+        &self,
         state: &mut Self::State,
         shared: &mut SharedApplicationState,
         event: Event,
@@ -552,5 +593,13 @@ impl Component for BuriedTreasureTabComponent {
                 _ => EventResult::BubbleUp(event),
             },
         }
+    }
+
+    fn on_focus(&self, state: &mut Self::State, _shared: &mut SharedApplicationState) {
+        state.focus = Focus::CoordX;
+    }
+
+    fn on_unfocus(&self, state: &mut Self::State, _shared: &mut SharedApplicationState) {
+        state.focus = Focus::Outside;
     }
 }

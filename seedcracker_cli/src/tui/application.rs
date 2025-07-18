@@ -15,6 +15,7 @@ use ratatui::{
 use crate::tui::{
     EventContext, EventResult, FullComponent,
     tabs::{
+        biomes::{BiomesTab, BiomesTabSharedData},
         buried_treasure::{BuriedTreasureTab, BuriedTreasureTabSharedData},
         end_pillars::EndPillarsTab,
         output::OutputTab,
@@ -27,14 +28,18 @@ pub struct ApplicationComponent;
 pub struct ApplicationTabs {
     pub end_pillars: ApplicationTab<EndPillarsTab>,
     pub buried_treasure: ApplicationTab<BuriedTreasureTab>,
+    pub biomes: ApplicationTab<BiomesTab>,
     pub output: ApplicationTab<OutputTab>,
 }
 
 impl ApplicationTabs {
-    pub fn titles(&self) -> [String; 3] {
+    const SIZE: usize = 4;
+
+    pub fn titles(&self) -> [String; Self::SIZE] {
         [
             self.end_pillars.title.clone(),
             self.buried_treasure.title.clone(),
+            self.biomes.title.clone(),
             self.output.title.clone(),
         ]
     }
@@ -49,7 +54,8 @@ impl ApplicationTabs {
         match idx {
             0 => self.end_pillars.component.render(area, buf, shared),
             1 => self.buried_treasure.component.render(area, buf, shared),
-            2 => self.output.component.render(area, buf, shared),
+            2 => self.biomes.component.render(area, buf, shared),
+            3 => self.output.component.render(area, buf, shared),
             _ => {}
         }
     }
@@ -70,13 +76,34 @@ impl ApplicationTabs {
                 .buried_treasure
                 .component
                 .handle_event(event, context, shared),
-            2 => self.output.component.handle_event(event, context, shared),
+            2 => self.biomes.component.handle_event(event, context, shared),
+            3 => self.output.component.handle_event(event, context, shared),
             _ => EventResult::BubbleUp(event),
         }
     }
 
-    pub fn size(&self) -> usize {
-        3
+    pub fn on_focus(&mut self, idx: usize, shared: &mut SharedApplicationState) {
+        match idx {
+            0 => self.end_pillars.component.on_focus(shared),
+            1 => self.buried_treasure.component.on_focus(shared),
+            2 => self.biomes.component.on_focus(shared),
+            3 => self.output.component.on_focus(shared),
+            _ => {}
+        }
+    }
+
+    pub fn on_unfocus(&mut self, idx: usize, shared: &mut SharedApplicationState) {
+        match idx {
+            0 => self.end_pillars.component.on_unfocus(shared),
+            1 => self.buried_treasure.component.on_unfocus(shared),
+            2 => self.biomes.component.on_unfocus(shared),
+            3 => self.output.component.on_unfocus(shared),
+            _ => {}
+        }
+    }
+
+    pub const fn size(&self) -> usize {
+        Self::SIZE
     }
 }
 
@@ -113,11 +140,13 @@ pub struct SharedApplicationState {
     pub last_structure_seed_sim: StructureSeedSimData,
     pub current_structure_seed_searcher: Option<StructureSeedSearcherHandle>,
     pub structure_seed_search_jobs: VecDeque<StructureSeedSearchData>,
+
+    pub biome_data: BiomesTabSharedData,
 }
 
 pub struct ApplicationComponentState {
     pub selected_tab: usize,
-    pub focused_on_tab: bool,
+    pub focused_on_tab_selector: bool,
 
     pub tabs: ApplicationTabs,
     pub shared: SharedApplicationState,
@@ -132,11 +161,12 @@ impl ApplicationComponentState {
     pub fn new() -> Self {
         Self {
             selected_tab: 0,
-            focused_on_tab: true,
+            focused_on_tab_selector: true,
             tabs: {
                 ApplicationTabs {
                     end_pillars: EndPillarsTab::apptab(),
                     buried_treasure: BuriedTreasureTab::apptab(),
+                    biomes: BiomesTab::apptab(),
                     output: OutputTab::apptab(),
                 }
             },
@@ -151,6 +181,7 @@ impl ApplicationComponentState {
                 },
                 current_structure_seed_searcher: None,
                 structure_seed_search_jobs: VecDeque::new(),
+                biome_data: BiomesTabSharedData::default(),
             },
         }
     }
@@ -183,7 +214,7 @@ impl ApplicationComponent {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(if state.focused_on_tab {
+                    .border_style(if state.focused_on_tab_selector {
                         Style::default().bold().fg(Color::LightCyan)
                     } else {
                         Style::default()
@@ -199,7 +230,7 @@ impl ApplicationComponent {
             .title(selected_title)
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
-            .border_style(if state.focused_on_tab {
+            .border_style(if state.focused_on_tab_selector {
                 Style::default()
             } else {
                 Style::default().bold().fg(Color::LightCyan)
@@ -221,12 +252,13 @@ impl ApplicationComponent {
     ) -> EventResult {
         match context {
             EventContext::BubblingDown => {
-                if state.focused_on_tab {
+                if state.focused_on_tab_selector {
                     match &event {
                         Event::Key(key)
                             if key.code == KeyCode::Tab || key.code == KeyCode::BackTab =>
                         {
-                            state.focused_on_tab = false;
+                            state.tabs.on_focus(state.selected_tab, &mut state.shared);
+                            state.focused_on_tab_selector = false;
                             EventResult::Captured
                         }
                         Event::Key(key) if key.code == KeyCode::Right => {
@@ -256,7 +288,8 @@ impl ApplicationComponent {
             }
             EventContext::BubblingUp => match &event {
                 Event::Key(key) if key.code == KeyCode::Tab || key.code == KeyCode::BackTab => {
-                    state.focused_on_tab = !state.focused_on_tab;
+                    state.tabs.on_unfocus(state.selected_tab, &mut state.shared);
+                    state.focused_on_tab_selector = !state.focused_on_tab_selector;
                     EventResult::Captured
                 }
                 _ => EventResult::BubbleUp(event),

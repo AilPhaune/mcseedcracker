@@ -65,7 +65,7 @@ impl Component for EndPillarsTabComponent {
     type State = EndPillarsTabState;
 
     fn render(
-        self,
+        &self,
         area: Rect,
         buf: &mut Buffer,
         state: &mut Self::State,
@@ -346,7 +346,7 @@ impl Component for EndPillarsTabComponent {
     }
 
     fn handle_event(
-        self,
+        &self,
         state: &mut Self::State,
         shared: &mut SharedApplicationState,
         event: Event,
@@ -500,5 +500,15 @@ impl Component for EndPillarsTabComponent {
             },
             EventContext::BubblingUp => EventResult::BubbleUp(event),
         }
+    }
+
+    fn on_focus(&self, state: &mut Self::State, _shared: &mut SharedApplicationState) {
+        state.focused_on_pillar = None;
+        state.waiting = WaitingOf::Nothing;
+    }
+
+    fn on_unfocus(&self, state: &mut Self::State, _shared: &mut SharedApplicationState) {
+        state.focused_on_pillar = None;
+        state.waiting = WaitingOf::Nothing;
     }
 }

@@ -37,7 +37,7 @@ pub fn run_tui() -> Result<(), io::Error> {
 
     'app: loop {
         terminal.draw(|f| {
-            if f.area().width < 80 || f.area().height < 30 {
+            if f.area().width < 160 || f.area().height < 45 {
                 f.render_widget(Paragraph::new("Terminal window too small"), f.area());
                 return;
             }

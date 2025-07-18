@@ -10,7 +10,7 @@ pub trait Component {
     type State;
 
     fn render(
-        self,
+        &self,
         area: Rect,
         buf: &mut Buffer,
         state: &mut Self::State,
@@ -18,12 +18,22 @@ pub trait Component {
     );
 
     fn handle_event(
-        self,
+        &self,
         state: &mut Self::State,
         shared: &mut SharedApplicationState,
         event: Event,
         context: EventContext,
     ) -> EventResult;
+
+    fn on_focus(&self, state: &mut Self::State, shared: &mut SharedApplicationState) {
+        let _ = state;
+        let _ = shared;
+    }
+
+    fn on_unfocus(&self, state: &mut Self::State, shared: &mut SharedApplicationState) {
+        let _ = state;
+        let _ = shared;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +57,10 @@ pub trait FullComponent {
         context: EventContext,
         shared: &mut SharedApplicationState,
     ) -> EventResult;
+
+    fn on_focus(&mut self, shared: &mut SharedApplicationState);
+
+    fn on_unfocus(&mut self, shared: &mut SharedApplicationState);
 }
 
 #[macro_export]
@@ -82,6 +96,14 @@ macro_rules! make_full_component {
                 shared: &mut SharedApplicationState,
             ) -> EventResult {
                 $component::default().handle_event(&mut self.state, shared, event, context)
+            }
+
+            fn on_focus(&mut self, shared: &mut SharedApplicationState) {
+                $component::default().on_focus(&mut self.state, shared);
+            }
+
+            fn on_unfocus(&mut self, shared: &mut SharedApplicationState) {
+                $component::default().on_unfocus(&mut self.state, shared);
             }
         }
     };
