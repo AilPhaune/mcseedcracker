@@ -153,6 +153,15 @@ impl PillarMatchResult {
     pub fn is_possible_match(&self) -> bool {
         matches!(self, PillarMatchResult::PossibleMatch(_))
     }
+
+    #[inline(always)]
+    pub fn chance(&self) -> f64 {
+        match self {
+            Self::ImpossibleMatch => 0.0,
+            Self::ExactMatch => 1.0,
+            Self::PossibleMatch(w) => *w,
+        }
+    }
 }
 
 impl PartialEndPillar {
