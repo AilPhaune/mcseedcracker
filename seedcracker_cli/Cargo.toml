@@ -9,3 +9,4 @@ mcseedcracker = { path = "../seedcracker_lib" }
 mcsci = { path = "../seedcracker_protocol" }
 ratatui = "0.29.0"
 clap = { version = "4.5.41", features = ["derive"] }
+rayon = "1.10.0"

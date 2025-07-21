@@ -1,4 +1,7 @@
-use mcseedcracker::search::{BiomeID, MC_1_16_5, WorldExtraData};
+use mcseedcracker::{
+    cubiomes::enums::{BiomeID, MCVersion},
+    search::WorldExtraData,
+};
 use ratatui::{
     buffer::Buffer,
     crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind},
@@ -276,7 +279,7 @@ impl Component for BiomesTabComponent {
             ne_data.1.style.show_cursor = false;
             ne_data.2.style.show_cursor = false;
             ne_data.3.style.show_cursor = false;
-            if state.focus == Focus::Overworld && state.selected_y == i {
+            if state.focus == Focus::Nether && state.selected_y == i {
                 match state.selected_x {
                     0 => ne_data.0.style.show_cursor = true,
                     1 => ne_data.1.style.show_cursor = true,
@@ -759,7 +762,7 @@ pub fn biome_id_validator() -> Validator<BiomeID> {
             let biomes = list_biomes()
                 .into_iter()
                 .filter_map(|b| {
-                    let str = b.to_mc_biome_str(MC_1_16_5);
+                    let str = b.to_mc_biome_str(MCVersion::MC_1_16_5);
                     if str.starts_with(&text) {
                         Some(*b)
                     } else {
@@ -768,7 +771,10 @@ pub fn biome_id_validator() -> Validator<BiomeID> {
                 })
                 .collect::<Vec<_>>();
 
-            if let Some(b) = biomes.iter().find(|b| b.to_mc_biome_str(MC_1_16_5) == text) {
+            if let Some(b) = biomes
+                .iter()
+                .find(|b| b.to_mc_biome_str(MCVersion::MC_1_16_5) == text)
+            {
                 *biome = *b;
                 style.text_style.fg = Some(Color::Green);
                 style.cursor_style.bg = Some(Color::Green);

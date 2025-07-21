@@ -3,7 +3,7 @@ use mcseedcracker::{
         buried_treasure::build_fast_inventory_compare_context, end_pillars::PillarMatchResult,
     },
     math::Math,
-    search::{StructureData, StructureSeedSearchData},
+    search::{StructureData, StructureSeedSearchData, WorldSeedSearchData},
 };
 use ratatui::{
     buffer::Buffer,
@@ -17,7 +17,10 @@ use crate::{
     make_full_component,
     tui::{
         Component, EventContext, EventResult,
-        application::{ApplicationTab, StructureSeedSimData, StructureSeedSimResultType},
+        application::{
+            ApplicationTab, StructureSeedSimData, StructureSeedSimResultType, WorldSeedSimData,
+            WorldSeedSimResultType,
+        },
         get_area_centered, limit_area_height, limit_area_width,
     },
 };
@@ -48,6 +51,18 @@ impl OutputTab {
             title: "Output".to_string(),
             component: OutputTab::create(),
         }
+    }
+}
+
+#[inline(always)]
+fn format_progress(mut value: f64) -> String {
+    if value > 100.0 {
+        value = 100.0;
+    }
+    if (value - 100.0).abs() < f64::EPSILON {
+        "100.0".to_string()
+    } else {
+        format!("{:05.2}", value)
     }
 }
 
@@ -194,18 +209,6 @@ impl OutputTabComponent {
                         ),
                         buf,
                     );
-
-                    #[inline(always)]
-                    fn format_progress(mut value: f64) -> String {
-                        if value > 100.0 {
-                            value = 100.0;
-                        }
-                        if (value - 100.0).abs() < f64::EPSILON {
-                            "100.0".to_string()
-                        } else {
-                            format!("{:05.2}", value)
-                        }
-                    }
 
                     let pgint = searcher.get_progress();
                     let pg = pgint as f64 / (1i64 << 32) as f64;
@@ -398,11 +401,231 @@ impl OutputTabComponent {
 
     fn render_world(
         &self,
-        _area: Rect,
-        _buf: &mut Buffer,
-        _state: &mut <Self as Component>::State,
-        _shared: &mut SharedApplicationState,
+        area: Rect,
+        buf: &mut Buffer,
+        state: &mut <Self as Component>::State,
+        shared: &mut SharedApplicationState,
     ) {
+        if let Some(ssim) = &shared.last_structure_seed_sim.data {
+            if ssim.count_seeds >= 1
+                && ssim.count_seeds as usize <= shared.max_structure_seeds_to_simulate
+            {
+                let y = if let Some(searcher) = &shared.current_world_seed_searcher {
+                    let cancel_btn = Paragraph::new("[Cancel search]").style(
+                        if state.focus == Focus::WorldSeedButton {
+                            Style::new().fg(Color::White).bold().bg(Color::LightMagenta)
+                        } else {
+                            Style::default().fg(Color::LightYellow).not_bold()
+                        },
+                    );
+                    cancel_btn.render(
+                        get_area_centered(
+                            limit_area_width(limit_area_height(area, 1), 18),
+                            limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                        ),
+                        buf,
+                    );
+
+                    let pgint = searcher.get_progress();
+                    let pg = pgint as f64 / (1i64 << 16) as f64;
+                    let pgtext = format!(
+                        "({} job{}) [{pgint:5}/65536] {}%",
+                        shared.structure_seed_search_jobs.len() + 1,
+                        if shared.structure_seed_search_jobs.is_empty() {
+                            ""
+                        } else {
+                            "s"
+                        },
+                        format_progress(pg * 100.0)
+                    );
+                    let pgtext_len = pgtext.len();
+                    let progress = Paragraph::new(pgtext).style(Style::new().fg(Color::Yellow));
+                    progress.render(
+                        get_area_centered(
+                            limit_area_width(limit_area_height(area, 1), pgtext_len as u16),
+                            limit_area_height(area, 1).offset(Offset { x: 0, y: 3 }),
+                        ),
+                        buf,
+                    );
+
+                    let gauge = Gauge::default()
+                        .gauge_style(Style::default().fg(Color::LightBlue).bg(Color::Gray))
+                        .ratio(pg)
+                        .use_unicode(true)
+                        .label("");
+                    gauge.render(
+                        limit_area_height(area, 1).offset(Offset { x: 0, y: 4 }),
+                        buf,
+                    );
+
+                    6
+                } else {
+                    let find_btn = Paragraph::new("[Find world seeds]").style(
+                        if state.focus == Focus::WorldSeedButton {
+                            Style::new().fg(Color::White).bold().bg(Color::LightMagenta)
+                        } else {
+                            Style::default().fg(Color::LightYellow).not_bold()
+                        },
+                    );
+                    find_btn.render(
+                        get_area_centered(
+                            limit_area_width(limit_area_height(area, 1), 18),
+                            limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                        ),
+                        buf,
+                    );
+
+                    3
+                };
+
+                let num_str = if shared.world_seed_sim.count_seeds
+                    >= shared.max_world_seeds_per_structure_seed as i64
+                {
+                    format!(">{}", shared.max_world_seeds_per_structure_seed)
+                } else {
+                    format!("{}", shared.world_seed_sim.count_seeds)
+                };
+                let num_str_len = num_str.len();
+
+                let sim_text1 = Paragraph::new("Found ").style(Style::default().fg(Color::White));
+                let sim_text2 = Paragraph::new(num_str).style(Style::default().fg(Color::Yellow));
+                let sim_text3 =
+                    Paragraph::new(" world seeds:").style(Style::default().fg(Color::White));
+
+                sim_text1.render(
+                    limit_area_width(limit_area_height(area, 1), 6).offset(Offset { x: 0, y }),
+                    buf,
+                );
+                sim_text2.render(
+                    limit_area_width(limit_area_height(area, 1), num_str_len as u16)
+                        .offset(Offset { x: 6, y }),
+                    buf,
+                );
+                sim_text3.render(
+                    limit_area_width(limit_area_height(area, 1), 17).offset(Offset {
+                        x: 6 + num_str_len as i32,
+                        y,
+                    }),
+                    buf,
+                );
+
+                let orig_y = y + 1;
+                let mut y = orig_y;
+                let mut x = 0;
+                let mut cur_struct_i: isize = -1;
+                let mut cur_seed_i = 0;
+                while x + 30 < area.width as i32
+                    && y < area.height as i32
+                    && cur_struct_i < shared.world_seed_sim.per_structure.len() as isize
+                {
+                    if cur_struct_i == -1
+                        || cur_seed_i
+                            >= shared.world_seed_sim.per_structure[cur_struct_i as usize]
+                                .world_seeds
+                                .len()
+                                .min(5)
+                    {
+                        cur_struct_i += 1;
+                        cur_seed_i = 0;
+                        if y + 4 >= area.height as i32
+                            || cur_struct_i >= shared.world_seed_sim.per_structure.len() as isize
+                        {
+                            break;
+                        }
+                        y += 1;
+
+                        Paragraph::new(format!(
+                            "Structure seed {}",
+                            shared.world_seed_sim.per_structure[cur_struct_i as usize]
+                                .structure_seed
+                        ))
+                        .style(Style::default().fg(Color::LightYellow).bold())
+                        .render(
+                            limit_area_width(limit_area_height(area, 1), 25)
+                                .offset(Offset { x, y }),
+                            buf,
+                        );
+
+                        y += 1;
+
+                        match shared.world_seed_sim.per_structure[cur_struct_i as usize].result {
+                            WorldSeedSimResultType::Success => {
+                                Paragraph::new("(success)")
+                                    .style(Style::default().fg(Color::Green).bold())
+                                    .render(
+                                        limit_area_width(limit_area_height(area, 1), 9)
+                                            .offset(Offset { x, y }),
+                                        buf,
+                                    );
+                            }
+                            WorldSeedSimResultType::TooManySeeds => {
+                                Paragraph::new("(+ more)")
+                                    .style(Style::default().fg(Color::Yellow).bold())
+                                    .render(
+                                        limit_area_width(limit_area_height(area, 1), 8)
+                                            .offset(Offset { x, y }),
+                                        buf,
+                                    );
+                            }
+                        }
+
+                        y += 1;
+
+                        continue;
+                    }
+
+                    if y == orig_y {
+                        y += 1;
+                    }
+
+                    Paragraph::new(format!(
+                        "{}",
+                        shared.world_seed_sim.per_structure[cur_struct_i as usize].world_seeds
+                            [cur_seed_i]
+                    ))
+                    .style(Style::new().fg(Color::Green).not_bold())
+                    .render(
+                        limit_area_width(limit_area_height(area, 1), 20).offset(Offset { x, y }),
+                        buf,
+                    );
+                    y += 1;
+
+                    cur_seed_i += 1;
+
+                    if y >= area.height as i32 {
+                        x += 35;
+                        y = orig_y;
+                    }
+                }
+            } else if ssim.count_seeds == 0 {
+                Paragraph::new("No structure seeds to search")
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(Color::Red).bold())
+                    .render(
+                        limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                        buf,
+                    );
+                return;
+            } else {
+                Paragraph::new("Too many structure seeds to search")
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(Color::Red).bold())
+                    .render(
+                        limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                        buf,
+                    );
+                return;
+            }
+        } else {
+            Paragraph::new("No structure seeds available")
+                .alignment(Alignment::Center)
+                .style(Style::default().fg(Color::Red).bold())
+                .render(
+                    limit_area_height(area, 1).offset(Offset { x: 0, y: 1 }),
+                    buf,
+                );
+            return;
+        };
     }
 }
 
@@ -577,6 +800,60 @@ impl Component for OutputTabComponent {
                                             },
                                         );
                                     }
+                                }
+                            }
+                        }
+
+                        EventResult::Captured
+                    }
+                    Focus::WorldSeedButton
+                        if key.code == KeyCode::Enter
+                            && shared.current_world_seed_searcher.is_some() =>
+                    {
+                        if let Some(job) = shared.current_world_seed_searcher.take() {
+                            shared.world_seed_search_jobs.clear();
+                            let _ = job.join();
+
+                            EventResult::Captured
+                        } else {
+                            // dafuk ?
+                            EventResult::BubbleUp(event)
+                        }
+                    }
+                    Focus::WorldSeedButton if key.code == KeyCode::Enter => {
+                        shared.world_seed_search_jobs.clear();
+                        shared.world_seed_sim = WorldSeedSimData {
+                            count_seeds: 0,
+                            per_structure: Vec::new(),
+                        };
+
+                        if let Some(job) = shared.current_world_seed_searcher.take() {
+                            let _ = job.join();
+                        }
+
+                        if let Some(sim) = &shared.last_structure_seed_sim.data {
+                            if sim.count_seeds >= 1
+                                && sim.count_seeds as usize
+                                    <= shared.max_structure_seeds_to_simulate
+                            {
+                                let mut data = Vec::new();
+                                data.push(shared.biome_data.overworld_biomes.clone());
+                                data.push(shared.biome_data.nether_biomes.clone());
+
+                                for &structure_seed in sim
+                                    .per_pillar
+                                    .iter()
+                                    .map(|p| p.structure_seeds.iter())
+                                    .flatten()
+                                {
+                                    shared
+                                        .world_seed_search_jobs
+                                        .push_back(WorldSeedSearchData {
+                                            structure_seed,
+                                            is_random_world_seed: shared.is_random_world_seed,
+                                            max_results: shared.max_world_seeds_per_structure_seed,
+                                            data: data.clone(),
+                                        });
                                 }
                             }
                         }

@@ -18,7 +18,7 @@ use crate::tui::{
     EventContext,
     application::{
         ApplicationComponent, ApplicationComponentState, PillarSeedStructureSim, StructureSeedSim,
-        StructureSeedSimResultType,
+        StructureSeedSimResultType, StructureSeedWorldSim, WorldSeedSimResultType,
     },
 };
 
@@ -109,6 +109,41 @@ pub fn run_tui() -> Result<(), io::Error> {
         if app_state.shared.current_structure_seed_searcher.is_none() {
             if let Some(job) = app_state.shared.structure_seed_search_jobs.pop_front() {
                 app_state.shared.current_structure_seed_searcher = Some(job.spawn_multithreaded());
+            }
+        }
+
+        if let Some(searcher) = &app_state.shared.current_world_seed_searcher {
+            if searcher.is_done() {
+                let status: Status = searcher.get_status();
+                let restype = match status {
+                    Status::Searching => unreachable!(),
+                    Status::Complete { .. } => WorldSeedSimResultType::Success,
+                    Status::Cancelled { .. } => unreachable!(),
+                    Status::TooManySeeds { .. } => WorldSeedSimResultType::TooManySeeds,
+                };
+                match status {
+                    Status::Searching | Status::Cancelled { .. } => unreachable!(),
+                    Status::Complete { seeds }
+                    | Status::TooManySeeds {
+                        seeds_incomplete: seeds,
+                    } => {
+                        let v = &mut app_state.shared.world_seed_sim;
+                        v.count_seeds += seeds.len() as i64;
+                        v.per_structure.push(StructureSeedWorldSim {
+                            structure_seed: searcher.get_structure_seed(),
+                            result: restype,
+                            world_seeds: seeds,
+                        });
+                    }
+                }
+
+                app_state.shared.current_world_seed_searcher = None;
+            }
+        }
+
+        if app_state.shared.current_world_seed_searcher.is_none() {
+            if let Some(job) = app_state.shared.world_seed_search_jobs.pop_front() {
+                app_state.shared.current_world_seed_searcher = Some(job.spawn_multithreaded());
             }
         }
     }

@@ -5,7 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
-cubiomes = "0.3.3"
+cubiomes = { git = "https://github.com/AilPhaune/cubiomes-rs.git" }
 rayon = "1.10.0"
 uint = "0.10.0"
 

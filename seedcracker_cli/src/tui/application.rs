@@ -2,7 +2,10 @@ use std::collections::VecDeque;
 
 use mcseedcracker::{
     features::end_pillars::{PartialEndPillars, PillarMatchResult},
-    search::{StructureSeedSearchData, StructureSeedSearcherHandle},
+    search::{
+        StructureSeedSearchData, StructureSeedSearcherHandle, WorldSeedSearchData,
+        WorldSeedSearcherHandle,
+    },
 };
 use ratatui::{
     buffer::Buffer,
@@ -130,10 +133,30 @@ pub struct StructureSeedSimData {
     pub data: Option<StructureSeedSim>,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorldSeedSimResultType {
+    Success,
+    TooManySeeds,
+}
+
+pub struct StructureSeedWorldSim {
+    pub structure_seed: i64,
+    pub result: WorldSeedSimResultType,
+    pub world_seeds: Vec<i64>,
+}
+
+pub struct WorldSeedSimData {
+    pub count_seeds: i64,
+    pub per_structure: Vec<StructureSeedWorldSim>,
+}
+
 pub struct SharedApplicationState {
     pub pillar_data: PartialEndPillars,
     pub last_pillar_sim: Option<(PartialEndPillars, Vec<(i64, PillarMatchResult)>)>,
+
     pub max_pillars_to_simulate: usize,
+    pub max_structure_seeds_to_simulate: usize,
+    pub max_world_seeds_per_structure_seed: u16,
 
     pub buried_treasure_data: BuriedTreasureTabSharedData,
 
@@ -142,6 +165,10 @@ pub struct SharedApplicationState {
     pub structure_seed_search_jobs: VecDeque<StructureSeedSearchData>,
 
     pub biome_data: BiomesTabSharedData,
+    pub current_world_seed_searcher: Option<WorldSeedSearcherHandle>,
+    pub world_seed_search_jobs: VecDeque<WorldSeedSearchData>,
+    pub world_seed_sim: WorldSeedSimData,
+    pub is_random_world_seed: bool,
 }
 
 pub struct ApplicationComponentState {
@@ -174,6 +201,8 @@ impl ApplicationComponentState {
                 pillar_data: PartialEndPillars::new(),
                 last_pillar_sim: None,
                 max_pillars_to_simulate: 5,
+                max_structure_seeds_to_simulate: 5,
+                max_world_seeds_per_structure_seed: 5,
                 buried_treasure_data: BuriedTreasureTabSharedData::default(),
                 last_structure_seed_sim: StructureSeedSimData {
                     outdated_data: true,
@@ -182,6 +211,13 @@ impl ApplicationComponentState {
                 current_structure_seed_searcher: None,
                 structure_seed_search_jobs: VecDeque::new(),
                 biome_data: BiomesTabSharedData::default(),
+                current_world_seed_searcher: None,
+                world_seed_search_jobs: VecDeque::new(),
+                world_seed_sim: WorldSeedSimData {
+                    count_seeds: 0,
+                    per_structure: Vec::new(),
+                },
+                is_random_world_seed: true,
             },
         }
     }

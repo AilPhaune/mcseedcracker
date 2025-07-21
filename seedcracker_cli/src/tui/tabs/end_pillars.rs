@@ -430,6 +430,7 @@ impl Component for EndPillarsTabComponent {
                     if let Some(i) = state.focused_on_pillar {
                         let pillar = &mut shared.pillar_data.0[i];
                         pillar.height = PillarHeightHint::Unknown;
+                        pillar.caged = None;
                     }
                     state.waiting = WaitingOf::Nothing;
                     EventResult::Captured

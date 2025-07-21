@@ -7,6 +7,8 @@ pub mod random;
 pub mod search;
 pub mod utils;
 
+pub use cubiomes;
+
 pub const CHARACTER_ASPECT_RATIO: f64 = 0.5; // width/height
 
 #[cfg(test)]
